@@ -3,21 +3,15 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BadgeCheck,
-  CakeSlice,
-  ChevronUp,
   Cloud,
-  CupSoda,
   Edit3,
   Eye,
   EyeOff,
-  GlassWater,
   Globe2,
   Heart,
   Home,
   ImageIcon,
   Instagram,
-  Martini,
-  Milk,
   Plus,
   RotateCcw,
   Save,
@@ -26,8 +20,6 @@ import {
   Star,
   Trash2,
   Upload,
-  Waves,
-  Wine,
   X
 } from "lucide-react";
 import type { ChangeEvent, ReactNode } from "react";
@@ -89,20 +81,37 @@ type AppCopy = {
   unavailable: string;
   available: string;
   delete: string;
+  pricePlaceholder: string;
+  ingredients: string;
+  goiaSignature: string;
+  bestSeller: string;
+  premium: string;
+  classic: string;
+  allFlavors: string;
 };
 
 const reviewUrl =
   "https://www.google.com/maps/place//data=!4m3!3m2!1s0x4796cf800b7cf257:0x871ef082619b267!12e1?source=g.page.m._&laa=merchant-review-solicitation";
 const instagramUrl = "https://www.instagram.com/goia.kehl/?hl=de";
+const findUsUrl =
+  "https://www.google.com/maps/search/?api=1&query=GOIA%20Huqqa%20Lounge%20Bahnhofstra%C3%9Fe%206%2077694%20Kehl";
 
 const currency = new Intl.NumberFormat("fr-FR", {
   style: "currency",
   currency: "EUR",
-  maximumFractionDigits: 0
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2
+});
+
+const fractionalCurrency = new Intl.NumberFormat("fr-FR", {
+  style: "currency",
+  currency: "EUR",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
 });
 
 const luxuryEase = [0.16, 1, 0.3, 1] as const;
-const storageVersion = "goia-luxury-v3";
+const storageVersion = "goia-luxury-v11";
 const localeStorageKey = "goia:locale";
 
 const blankProduct = (): Product => ({
@@ -166,7 +175,14 @@ const appCopy: Record<Locale, AppCopy> = {
     category: "Catégorie",
     unavailable: "Indisponible",
     available: "Disponible",
-    delete: "Supprimer"
+    delete: "Supprimer",
+    pricePlaceholder: "Prix à venir",
+    ingredients: "Ingrédients",
+    goiaSignature: "GOIA Signature",
+    bestSeller: "Best Seller",
+    premium: "Premium",
+    classic: "Classique",
+    allFlavors: "Disponible avec tous nos goûts."
   },
   de: {
     followTitle: "GOIA auf Instagram folgen",
@@ -212,7 +228,14 @@ const appCopy: Record<Locale, AppCopy> = {
     category: "Kategorie",
     unavailable: "Nicht verfügbar",
     available: "Verfügbar",
-    delete: "Löschen"
+    delete: "Löschen",
+    pricePlaceholder: "Preis folgt",
+    ingredients: "Zutaten",
+    goiaSignature: "GOIA Signature",
+    bestSeller: "Best Seller",
+    premium: "Premium",
+    classic: "Klassisch",
+    allFlavors: "Mit allen unseren Sorten verfügbar."
   },
   en: {
     followTitle: "Follow GOIA on Instagram",
@@ -258,9 +281,35 @@ const appCopy: Record<Locale, AppCopy> = {
     category: "Category",
     unavailable: "Unavailable",
     available: "Available",
-    delete: "Delete"
+    delete: "Delete",
+    pricePlaceholder: "Price coming soon",
+    ingredients: "Ingredients",
+    goiaSignature: "GOIA Signature",
+    bestSeller: "Best Seller",
+    premium: "Premium",
+    classic: "Classic",
+    allFlavors: "Available with all our flavors."
   }
 };
+
+function formatProductPrice(product: Product, locale: Locale) {
+  if (product.price <= 0) return appCopy[locale].pricePlaceholder;
+  return Number.isInteger(product.price)
+    ? currency.format(product.price)
+    : fractionalCurrency.format(product.price);
+}
+
+function getProductBadge(product: Product, locale: Locale) {
+  const c = appCopy[locale];
+
+  if (product.badge === "premium") return `✨ ${c.premium}`;
+  if (product.badge === "classic") return c.classic;
+  if (product.badge === "best-seller") return `🔥 ${c.bestSeller}`;
+  if (product.badge === "signature" || product.signature) return `⭐ ${c.goiaSignature}`;
+  if (product.featured) return `🔥 ${c.bestSeller}`;
+  if (product.badge) return product.badge;
+  return "";
+}
 
 function isCategory(value: string): value is Category {
   return categoryOrder.includes(value as Category);
@@ -639,8 +688,6 @@ function Landing({
   setLocale: (locale: Locale) => void;
   onEnter: () => void;
 }) {
-  const t = uiCopy[locale];
-  const c = appCopy[locale];
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoResetTimeoutRef = useRef<number | null>(null);
 
@@ -711,14 +758,18 @@ function Landing({
     >
       <motion.video
         ref={videoRef}
-        className="absolute inset-0 h-full w-full object-cover opacity-70 will-change-transform"
+        className="absolute inset-0 h-full w-full object-cover opacity-75 will-change-transform"
         autoPlay
         muted
         playsInline
         onTimeUpdate={(event) => restartWelcomeVideoAtFourteenSeconds(event.currentTarget)}
-        initial={{ scale: 1.08, opacity: 0 }}
-        animate={{ scale: 1.015, opacity: 0.7 }}
-        transition={{ scale: { duration: 8, ease: "easeOut" }, opacity: { duration: 1.8, ease: luxuryEase } }}
+        initial={{ scale: 1.06, y: 0, opacity: 0 }}
+        animate={{ scale: [1.06, 1.13, 1.06], y: [0, -10, 0], opacity: 0.74 }}
+        transition={{
+          scale: { duration: 20, repeat: Infinity, ease: "easeInOut" },
+          y: { duration: 16, repeat: Infinity, ease: "easeInOut" },
+          opacity: { duration: 1.8, ease: luxuryEase }
+        }}
       >
         <source src="/goia-welcome.mp4" type="video/mp4" />
         <source src="/goia-welcome.webm" type="video/webm" />
@@ -727,7 +778,7 @@ function Landing({
           type="video/mp4"
         />
       </motion.video>
-      <div className="pointer-events-none absolute inset-0 bg-[rgba(0,0,0,0.45)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[rgba(0,0,0,0.58)]" />
       <motion.div
         initial={{ opacity: 1 }}
         animate={{ opacity: 0 }}
@@ -744,109 +795,127 @@ function Landing({
       </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 18, filter: "blur(12px)" }}
+        initial={{ opacity: 0, y: 18, filter: "blur(14px)" }}
         animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-        transition={{ duration: 0.9, ease: luxuryEase }}
-        className="relative z-10 flex flex-col items-center text-center will-change-transform"
+        transition={{ duration: 1.05, ease: luxuryEase }}
+        className="relative z-10 flex min-h-screen w-full max-w-3xl flex-col items-center justify-center pb-24 pt-28 text-center will-change-transform"
       >
         <motion.div
-          initial={{ opacity: 0, scale: 0.94 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 1.05, ease: luxuryEase }}
-          className="relative"
+          initial={{ opacity: 0, scale: 0.92, y: 16 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 1.15, ease: luxuryEase }}
+          className="relative flex flex-col items-center"
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.7 }}
             animate={{ opacity: 0.55, scale: 1 }}
             transition={{ duration: 1.2, ease: luxuryEase }}
-            className="pointer-events-none absolute left-1/2 top-1/2 h-44 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-taupe/20 blur-3xl sm:h-56 sm:w-96"
+            className="pointer-events-none absolute left-1/2 top-1/2 h-52 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#C8A45B]/18 blur-3xl sm:h-64 sm:w-[30rem]"
           />
-          <GoiaLogo mark />
+          <span className="relative text-[clamp(5.4rem,21.5vw,10.8rem)] font-semibold leading-none tracking-[0.08em] text-white drop-shadow-[0_18px_70px_rgba(0,0,0,0.85)]">
+            GOIA
+          </span>
+          <span className="relative mt-2 text-sm font-light uppercase tracking-[0.48em] text-[#C8A45B] sm:text-base">
+            HUQQA LOUNGE
+          </span>
         </motion.div>
         <motion.p
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.8, ease: luxuryEase }}
-          className="mt-10 text-xl font-light text-white/82 sm:text-2xl"
+          transition={{ delay: 0.25, duration: 0.8, ease: luxuryEase }}
+          className="mt-8 text-sm font-light leading-7 tracking-[0.18em] text-[#E6C675] sm:text-base sm:leading-8"
         >
-          {t.welcome}
+          <span className="block">Luxury Huqqa Lounge</span>
+          <span className="block text-white/72">Cocktails • Desserts • Premium Experience</span>
         </motion.p>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.42, duration: 0.75, ease: luxuryEase }}
+          className="mt-6 flex flex-col items-center gap-2"
+        >
+          <span className="text-lg tracking-[0.2em] text-[#C8A45B] drop-shadow-[0_0_24px_rgba(200,164,91,0.35)]">
+            ★★★★★
+          </span>
+          <span className="text-xs uppercase tracking-[0.22em] text-white/58">
+            The Premium Lounge in Kehl
+          </span>
+        </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 14, scale: 0.985 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ delay: 0.6, duration: 0.8, ease: luxuryEase }}
-          className="mt-9"
+          transition={{ delay: 0.62, duration: 0.8, ease: luxuryEase }}
+          className="mt-10"
         >
           <motion.button
-            animate={{ y: [0, -3, 0] }}
-            transition={{ delay: 1.45, duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
+            whileHover={{
+              y: -3,
+              boxShadow:
+                "0 0 56px rgba(200,164,91,0.48), 0 28px 88px rgba(0,0,0,0.55)"
+            }}
+            whileTap={{ scale: 0.985 }}
+            animate={{ y: [0, -2, 0] }}
+            transition={{ delay: 1.35, duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
             onClick={onEnter}
-            className="inline-flex h-14 items-center gap-3 rounded-full border border-white/40 bg-porcelain/95 px-7 text-sm font-semibold uppercase tracking-[0.18em] text-ink shadow-glow backdrop-blur-xl transition duration-300 hover:bg-white"
+            className="inline-flex h-16 items-center gap-3 rounded-full border border-[#F3D891]/50 bg-[#C8A45B] px-9 text-sm font-semibold uppercase tracking-[0.2em] text-black shadow-[0_0_38px_rgba(200,164,91,0.28),0_20px_70px_rgba(0,0,0,0.42)] transition duration-300 hover:bg-[#E5C779] sm:h-[4.5rem] sm:px-12 sm:text-base"
           >
-            {t.enter}
-            <ChevronUp size={18} />
+            <span aria-hidden="true">→</span>
+            ENTER THE MENU
           </motion.button>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 18, filter: "blur(10px)" }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           transition={{ delay: 0.85, duration: 0.85, ease: luxuryEase }}
-          className="mt-8 grid w-full max-w-[38rem] gap-3 px-1 sm:grid-cols-2"
+          className="mt-7 grid w-full max-w-[36rem] gap-3 px-1 sm:grid-cols-3"
         >
-          <LandingActionCard
-            href={instagramUrl}
-            icon={<Instagram size={20} />}
-            title={c.followTitle}
-            subtitle={c.followSubtitle}
-          />
-          <LandingActionCard
-            href={reviewUrl}
-            icon={<Star size={20} />}
-            title={c.reviewTitle}
-            subtitle={c.reviewSubtitle}
-          />
+          <LandingGlassButton href={instagramUrl} icon="📸" label="Instagram" />
+          <LandingGlassButton href={reviewUrl} icon="⭐" label="Google Reviews" />
+          <LandingGlassButton href={findUsUrl} icon="📍" label="Find Us" />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.05, duration: 0.8, ease: luxuryEase }}
+          className="absolute bottom-3 left-1/2 w-full max-w-xs -translate-x-1/2 px-4 text-center text-xs leading-6 tracking-[0.16em] text-white/58 sm:bottom-4 sm:max-w-md"
+        >
+          <div className="mx-auto mb-4 h-px w-24 bg-gradient-to-r from-transparent via-[#C8A45B]/70 to-transparent shadow-[0_0_18px_rgba(200,164,91,0.28)]" />
+          <p>Bahnhofstraße 6</p>
+          <p>77694 Kehl</p>
+          <p className="mt-2 text-white/44">Open every day until late.</p>
         </motion.div>
       </motion.div>
     </motion.section>
   );
 }
 
-function LandingActionCard({
+function LandingGlassButton({
   href,
   icon,
-  title,
-  subtitle
+  label
 }: {
   href: string;
-  icon: ReactNode;
-  title: string;
-  subtitle: string;
+  icon: string;
+  label: string;
 }) {
   return (
     <motion.a
       href={href}
       target="_blank"
       rel="noreferrer"
-      whileHover={{ y: -5, scale: 1.015 }}
+      whileHover={{ y: -4, scale: 1.018 }}
       whileTap={{ scale: 0.985 }}
       transition={{ duration: 0.28, ease: luxuryEase }}
-      className="group relative overflow-hidden rounded-[1.45rem] border border-[#C8A45B]/25 bg-black/35 p-4 text-left shadow-[0_18px_60px_rgba(0,0,0,0.34)] backdrop-blur-2xl transition duration-300 hover:border-[#C8A45B]/55 hover:bg-black/48 sm:p-5"
+      className="group relative overflow-hidden rounded-2xl border border-[#C8A45B]/24 bg-white/[0.075] px-4 py-4 text-center shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl transition duration-300 hover:border-[#C8A45B]/60 hover:bg-[#C8A45B]/12"
     >
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(200,164,91,0.18),rgba(255,255,255,0.05)_38%,rgba(0,0,0,0)_72%)] opacity-70 transition duration-300 group-hover:opacity-100" />
-      <div className="pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-[#C8A45B]/16 blur-2xl transition duration-500 group-hover:bg-[#C8A45B]/24" />
-      <div className="relative flex items-start gap-4">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#C8A45B]/35 bg-[#C8A45B]/12 text-[#C8A45B] shadow-[0_0_32px_rgba(200,164,91,0.18)] transition duration-300 group-hover:border-[#C8A45B]/70 group-hover:bg-[#C8A45B]/18 group-hover:text-[#F2D991]">
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(200,164,91,0.16),rgba(255,255,255,0.07)_42%,rgba(0,0,0,0)_78%)] opacity-60 transition duration-300 group-hover:opacity-100" />
+      <div className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-[#C8A45B]/16 blur-2xl transition duration-500 group-hover:bg-[#C8A45B]/26" />
+      <span className="relative flex items-center justify-center gap-2 text-sm font-medium uppercase tracking-[0.14em] text-white/86 transition duration-300 group-hover:text-[#F4D989]">
+        <span className="text-base" aria-hidden="true">
           {icon}
         </span>
-        <span className="min-w-0">
-          <span className="block text-sm font-semibold tracking-[0.12em] text-white sm:text-[0.95rem]">
-            {title}
-          </span>
-          <span className="mt-2 block text-xs leading-5 text-white/62 sm:text-sm sm:leading-6">
-            {subtitle}
-          </span>
-        </span>
-      </div>
+        {label}
+      </span>
     </motion.a>
   );
 }
@@ -1021,6 +1090,16 @@ const categoryDescriptions: Record<Category, Record<Locale, string>> = {
     de: "Raffinierte Rituale, sanfter Rauch und Premium-Mischungen.",
     en: "Refined rituals, smooth smoke and premium blends."
   },
+  "softs-juices": {
+    fr: "Softs, jus et boissons fraîches servis avec élégance.",
+    de: "Softdrinks, Säfte und erfrischende Getränke, elegant serviert.",
+    en: "Soft drinks, juices and chilled refreshments served with polish."
+  },
+  "hot-drinks": {
+    fr: "Thés, cafés et boissons chaudes pour prolonger le moment.",
+    de: "Tee, Kaffee und Heißgetränke für einen ruhigen Moment.",
+    en: "Teas, coffees and warm drinks for a slower lounge moment."
+  },
   cocktails: {
     fr: "Classiques élégants, créations maison et services dorés.",
     de: "Elegante Klassiker, Hauskreationen und goldene Serves.",
@@ -1095,7 +1174,7 @@ const signatureMixes = [
       de: "Melone • Wassermelone • Passionsfrucht",
       en: "Melon • Watermelon • Passion fruit"
     },
-    badge: "featured"
+    badge: "best-seller"
   },
   {
     name: "Hawaï",
@@ -1120,7 +1199,7 @@ const signatureMixes = [
       de: "Mango • Melone • Erdbeere",
       en: "Mango • Melon • Strawberry"
     },
-    badge: "featured"
+    badge: "best-seller"
   },
   {
     name: "Menthe Mangue",
@@ -1171,27 +1250,29 @@ const classicChichaFlavors = [
 ];
 
 function getCategoryIcon(category: Category) {
-  const iconProps = { size: 20, strokeWidth: 1.8 };
-
   switch (category) {
     case "chichas":
-      return <Cloud {...iconProps} />;
+      return <span className="text-[1.2rem] leading-none">💨</span>;
+    case "softs-juices":
+      return <span className="text-[1.2rem] leading-none">🥤</span>;
+    case "hot-drinks":
+      return <span className="text-[1.2rem] leading-none">☕</span>;
     case "cocktails":
-      return <Martini {...iconProps} />;
+      return <span className="text-[1.2rem] leading-none">🍸</span>;
     case "mocktails":
-      return <CupSoda {...iconProps} />;
+      return <span className="text-[1.2rem] leading-none">🍹</span>;
     case "milkshakes":
-      return <Milk {...iconProps} />;
+      return <span className="text-[1.2rem] leading-none">🥛</span>;
     case "smoothies":
-      return <Waves {...iconProps} />;
+      return <span className="text-[1.2rem] leading-none">🥭</span>;
     case "spiritueux":
-      return <Wine {...iconProps} />;
+      return <span className="text-[1.2rem] leading-none">🥃</span>;
     case "boissons":
-      return <GlassWater {...iconProps} />;
+      return <span className="text-[1.2rem] leading-none">🥤</span>;
     case "desserts":
-      return <CakeSlice {...iconProps} />;
+      return <span className="text-[1.2rem] leading-none">🍰</span>;
     case "goia-signatures":
-      return <Sparkles {...iconProps} />;
+      return <span className="text-[1.2rem] leading-none">✨</span>;
   }
 }
 
@@ -1356,44 +1437,64 @@ function FeaturedProducts({
         <BadgeCheck className="text-taupe" size={24} />
       </div>
       <div className="no-scrollbar -mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-        {products.map((product) => (
+        {products.map((product) => {
+          const badge = getProductBadge(product, locale);
+
+          return (
           <motion.article
             key={product.id}
             layoutId={`featured-${product.id}`}
             whileTap={{ scale: 0.98 }}
             onClick={() => onOpen(product)}
-            className="relative h-[24rem] w-[82vw] max-w-[28rem] shrink-0 snap-center overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.045] shadow-glass sm:w-[26rem]"
+            className="relative h-[24rem] w-[82vw] max-w-[28rem] shrink-0 snap-center overflow-hidden rounded-[2rem] border border-[#C8A45B]/18 bg-white/[0.045] shadow-[0_24px_80px_rgba(0,0,0,0.42)] sm:w-[26rem]"
           >
-            <ProductImage src={product.image} alt={product.name[locale]} className="h-full w-full" />
+            {product.image ? (
+              <ProductImage src={product.image} alt={product.name[locale]} className="h-full w-full" />
+            ) : (
+              <ProductPhotoPlaceholder
+                icon={getCategoryIcon(product.category)}
+                label={product.name[locale]}
+              />
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/18 to-transparent" />
+            <span className="absolute right-4 top-4 rounded-full border border-[#C8A45B]/45 bg-[#C8A45B]/95 px-4 py-2 text-sm font-semibold text-black shadow-[0_0_34px_rgba(200,164,91,0.28)] backdrop-blur-xl">
+              {formatProductPrice(product, locale)}
+            </span>
+            <span className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-[#C8A45B]/30 bg-black/42 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-[#F2D991] backdrop-blur-xl">
+              {getCategoryIcon(product.category)}
+              {labels[product.category][locale]}
+            </span>
             <button
               onClick={(event) => {
                 event.stopPropagation();
                 onToggleFavorite(product.id);
               }}
               aria-label="Favorite"
-              className="absolute right-4 top-4 flex h-12 w-12 items-center justify-center rounded-full bg-black/38 text-white backdrop-blur-xl transition hover:bg-white hover:text-ink"
+              className="absolute right-4 top-16 flex h-12 w-12 items-center justify-center rounded-full bg-black/38 text-white backdrop-blur-xl transition hover:bg-white hover:text-ink"
             >
               <Heart size={20} fill={favorites.includes(product.id) ? "currentColor" : "none"} />
             </button>
+            {badge && (
+              <span className="absolute bottom-32 left-5 rounded-full border border-[#C8A45B]/45 bg-black/38 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F2D991] shadow-[0_0_30px_rgba(200,164,91,0.18)] backdrop-blur-xl">
+                {badge}
+              </span>
+            )}
             <div className="absolute bottom-0 left-0 right-0 p-5">
               <p className="text-xs uppercase tracking-[0.22em] text-taupe">
                 {labels[product.category][locale]}
               </p>
-              <div className="mt-2 flex items-end justify-between gap-4">
-                <h3 className="text-3xl font-semibold leading-tight text-white">
+              <div className="mt-2 rounded-[1.25rem] bg-gradient-to-r from-black/58 via-black/26 to-transparent p-3">
+                <h3 className="text-3xl font-semibold leading-tight text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.55)]">
                   {product.name[locale]}
                 </h3>
-                <p className="shrink-0 text-xl font-semibold text-white">
-                  {currency.format(product.price)}
-                </p>
               </div>
               <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/66">
                 {product.description[locale]}
               </p>
             </div>
           </motion.article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -1478,7 +1579,13 @@ function ProductGrid({
   const isChichasPage = activeCategory === "chichas";
 
   return (
-    <section className="grid gap-5">
+    <motion.section
+      key={`products-${activeCategory ?? "all"}`}
+      initial={{ opacity: 0, y: 18, filter: "blur(8px)" }}
+      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+      transition={{ duration: 0.48, ease: luxuryEase }}
+      className="grid gap-5"
+    >
       <div className="flex items-end justify-between gap-4 border-t border-[#C8A45B]/18 pt-6">
         <div>
           <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">
@@ -1498,21 +1605,25 @@ function ProductGrid({
         </p>
       </div>
 
-      <motion.div layout className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <motion.div layout className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
         <AnimatePresence mode="popLayout">
-          {products.map((product) => (
+          {products.map((product) => {
+            const badge = getProductBadge(product, locale);
+
+            return (
             <motion.article
               layout
               key={product.id}
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              whileHover={{ y: -4 }}
-              transition={{ duration: 0.35, ease: luxuryEase }}
+              whileHover={{ y: -8, scale: 1.012 }}
+              transition={{ duration: 0.48, ease: luxuryEase }}
               onClick={() => onOpen(product)}
-              className="group overflow-hidden rounded-[2.15rem] border border-[#C8A45B]/18 bg-black/48 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-2xl transition hover:border-[#C8A45B]/45"
+              className="group relative flex h-full flex-col overflow-hidden rounded-[2rem] border border-[#C8A45B]/18 bg-black/54 shadow-[0_24px_90px_rgba(0,0,0,0.46)] backdrop-blur-2xl transition hover:border-[#C8A45B]/50 hover:shadow-[0_34px_120px_rgba(0,0,0,0.58)]"
             >
-              <div className="relative aspect-[4/3] overflow-hidden bg-black">
+              <div className="pointer-events-none absolute -inset-12 bg-[radial-gradient(circle_at_50%_20%,rgba(200,164,91,0.24),transparent_42%)] opacity-60 blur-2xl transition duration-500 group-hover:opacity-95" />
+              <div className="relative h-[22rem] overflow-hidden bg-black sm:h-[24rem]">
                 {product.image ? (
                   <ProductImage
                     src={product.image}
@@ -1520,52 +1631,76 @@ function ProductGrid({
                     className="h-full w-full transition duration-700 group-hover:scale-105"
                   />
                 ) : (
-                  <ProductPhotoPlaceholder label={c.photoReserved} />
+                  <ProductPhotoPlaceholder
+                    icon={getCategoryIcon(product.category)}
+                    label={product.name[locale]}
+                  />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/10 to-transparent" />
+                <span className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-[#C8A45B]/30 bg-black/42 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-[#F2D991] backdrop-blur-xl">
+                  {getCategoryIcon(product.category)}
+                  {labels[product.category][locale]}
+                </span>
+                <span className="absolute right-4 top-4 rounded-full border border-[#C8A45B]/45 bg-[#C8A45B]/95 px-4 py-2 text-sm font-semibold text-black shadow-[0_0_34px_rgba(200,164,91,0.28)] backdrop-blur-xl">
+                  {formatProductPrice(product, locale)}
+                </span>
                 <button
                   onClick={(event) => {
                     event.stopPropagation();
                     onToggleFavorite(product.id);
                   }}
                   aria-label="Favorite"
-                  className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-black/38 text-white backdrop-blur-xl transition hover:bg-white hover:text-ink"
+                  className="absolute right-4 top-16 flex h-11 w-11 items-center justify-center rounded-full bg-black/38 text-white backdrop-blur-xl transition hover:bg-white hover:text-ink"
                 >
                   <Heart
                     size={19}
                     fill={favorites.includes(product.id) ? "currentColor" : "none"}
                   />
                 </button>
-                {(product.badge || product.signature || product.featured) && (
-                  <span className="absolute bottom-4 left-4 rounded-full border border-[#C8A45B]/35 bg-[#C8A45B]/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-black">
-                    {product.badge ||
-                      (product.signature ? c.signatureBadge : c.featuredBadge)}
+                {badge && (
+                  <span className="absolute bottom-4 left-4 rounded-full border border-[#C8A45B]/45 bg-black/38 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F2D991] shadow-[0_0_30px_rgba(200,164,91,0.18)] backdrop-blur-xl">
+                    {badge}
                   </span>
                 )}
               </div>
-              <div className="p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
+              <div className="relative flex flex-1 flex-col p-5 sm:p-6">
+                <div className="flex items-start gap-4">
+                  <div className="min-w-0 flex-1 rounded-[1.25rem] bg-gradient-to-r from-black/50 via-black/22 to-transparent p-3 -m-3">
                     <p className="text-xs uppercase tracking-[0.22em] text-[#C8A45B]">
                       {labels[product.category][locale]}
                     </p>
-                    <h2 className="mt-2 text-2xl font-semibold text-white">{product.name[locale]}</h2>
+                    <h2 className="mt-2 text-2xl font-semibold leading-tight text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.45)]">
+                      {product.name[locale]}
+                    </h2>
+                    {product.category === "chichas" && (
+                      <p className="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-white/46">
+                        {c.allFlavors}
+                      </p>
+                    )}
                   </div>
-                  <p className="shrink-0 text-xl font-semibold text-[#F2D991]">
-                    {currency.format(product.price)}
-                  </p>
                 </div>
-                <p className="mt-3 min-h-12 text-sm leading-6 text-white/60">
+                <p className="mt-5 min-h-12 text-sm leading-6 text-white/60">
                   {product.description[locale]}
                 </p>
+                {product.ingredients && (
+                  <div className="mt-4 rounded-[1.15rem] border border-[#C8A45B]/18 bg-[#C8A45B]/[0.06] p-3">
+                    <p className="text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-[#C8A45B]">
+                      {c.ingredients}
+                    </p>
+                    <p className="mt-2 text-xs leading-5 text-white/54">
+                      {product.ingredients[locale]}
+                    </p>
+                  </div>
+                )}
               </div>
             </motion.article>
-          ))}
+            );
+          })}
         </AnimatePresence>
       </motion.div>
 
       {isChichasPage && <ChichaFlavorSection locale={locale} />}
-    </section>
+    </motion.section>
   );
 }
 
@@ -1604,7 +1739,9 @@ function ChichaFlavorSection({ locale }: { locale: Locale }) {
                     </span>
                     {mix.badge && (
                       <span className="rounded-full border border-[#C8A45B]/40 bg-[#C8A45B]/12 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-[#F2D991]">
-                        {mix.badge === "signature" ? c.signatureBadge : c.featuredBadge}
+                        {mix.badge === "signature"
+                          ? `⭐ ${c.goiaSignature}`
+                          : `🔥 ${c.bestSeller}`}
                       </span>
                     )}
                   </div>
@@ -1652,13 +1789,18 @@ function ChichaFlavorSection({ locale }: { locale: Locale }) {
 
 function ProductPhotoPlaceholder({
   compact = false,
+  icon,
   label = appCopy.fr.photoReserved
 }: {
   compact?: boolean;
+  icon?: ReactNode;
   label?: string;
 }) {
   return (
-    <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_50%_36%,rgba(200,164,91,0.20),rgba(0,0,0,0.88)_58%)]">
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_32%,rgba(200,164,91,0.24),rgba(0,0,0,0.88)_58%)]">
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(200,164,91,0.12),transparent_42%,rgba(255,255,255,0.04))]" />
+      <div className="absolute h-40 w-40 rounded-full border border-[#C8A45B]/12" />
+      <div className="absolute h-64 w-64 rounded-full border border-white/[0.04]" />
       <div className="grid place-items-center gap-3 text-center">
         <span
           className={[
@@ -1666,9 +1808,9 @@ function ProductPhotoPlaceholder({
             compact ? "h-12 w-12" : "h-16 w-16"
           ].join(" ")}
         >
-          <Cloud size={compact ? 22 : 28} strokeWidth={1.6} />
+          {icon || <Sparkles size={compact ? 22 : 28} strokeWidth={1.6} />}
         </span>
-        <span className="text-xs uppercase tracking-[0.24em] text-[#C8A45B]">
+        <span className="max-w-[12rem] text-xs uppercase tracking-[0.22em] text-[#F2D991]">
           {label}
         </span>
       </div>
@@ -1692,6 +1834,7 @@ function ProductGallery({
   onToggleFavorite: (id: string) => void;
 }) {
   const c = appCopy[locale];
+  const galleryBadge = product ? getProductBadge(product, locale) : "";
 
   return (
     <AnimatePresence>
@@ -1711,22 +1854,54 @@ function ProductGallery({
           >
             <div className="relative min-h-[58vh] overflow-hidden lg:min-h-screen">
               {product.image ? (
-                <ProductImage src={product.image} alt={product.name[locale]} className="h-full w-full" />
+                <ProductImage
+                  src={product.image}
+                  alt={product.name[locale]}
+                  className="gallery-image-open h-full w-full"
+                />
               ) : (
-                <ProductPhotoPlaceholder label={c.photoReserved} />
+                <ProductPhotoPlaceholder
+                  icon={getCategoryIcon(product.category)}
+                  label={product.name[locale]}
+                />
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-transparent to-black/24" />
+              <span className="absolute right-5 top-5 rounded-full border border-[#C8A45B]/45 bg-[#C8A45B]/95 px-5 py-2.5 text-sm font-semibold text-black shadow-[0_0_34px_rgba(200,164,91,0.28)] backdrop-blur-xl">
+                {formatProductPrice(product, locale)}
+              </span>
             </div>
             <div className="flex flex-col justify-center bg-[radial-gradient(circle_at_50%_35%,rgba(138,118,101,0.16),transparent_22rem)] p-6 sm:p-10">
-              <p className="text-xs uppercase tracking-[0.28em] text-taupe">
-                {labels[product.category][locale]}
-              </p>
-              <h2 className="mt-4 text-5xl font-semibold leading-none text-white sm:text-7xl">
-                {product.name[locale]}
-              </h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#C8A45B]/28 bg-[#C8A45B]/10 px-3 py-1.5 text-xs uppercase tracking-[0.22em] text-[#F2D991]">
+                  {getCategoryIcon(product.category)}
+                  {labels[product.category][locale]}
+                </span>
+                {galleryBadge && (
+                  <span className="inline-flex rounded-full border border-[#C8A45B]/35 bg-[#C8A45B]/90 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-black">
+                    {galleryBadge}
+                  </span>
+                )}
+              </div>
+              <div className="mt-4 rounded-[1.5rem] bg-gradient-to-r from-black/50 via-black/22 to-transparent p-4 -mx-4">
+                <h2 className="text-5xl font-semibold leading-none text-white drop-shadow-[0_2px_22px_rgba(0,0,0,0.5)] sm:text-7xl">
+                  {product.name[locale]}
+                </h2>
+              </div>
               <p className="mt-5 text-lg leading-8 text-white/66">{product.description[locale]}</p>
+              {product.ingredients && (
+                <div className="mt-6 rounded-[1.5rem] border border-[#C8A45B]/20 bg-black/28 p-5 backdrop-blur-xl">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#C8A45B]">
+                    {c.ingredients}
+                  </p>
+                  <p className="mt-3 text-sm leading-7 text-white/62">
+                    {product.ingredients[locale]}
+                  </p>
+                </div>
+              )}
               <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-6">
-                <p className="text-3xl font-semibold text-white">{currency.format(product.price)}</p>
+                <p className="text-3xl font-semibold text-white">
+                  {formatProductPrice(product, locale)}
+                </p>
                 <button
                   onClick={() => onToggleFavorite(product.id)}
                   className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-ink"
@@ -2136,5 +2311,29 @@ function ProductImage({
   alt: string;
   className?: string;
 }) {
-  return <img src={src} alt={alt} loading="lazy" className={`object-cover ${className || ""}`} />;
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    setLoaded(false);
+  }, [src]);
+
+  return (
+    <span className="relative block h-full w-full overflow-hidden">
+      {!loaded && <span className="image-skeleton absolute inset-0" />}
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        sizes="(min-width: 1280px) 33vw, (min-width: 640px) 50vw, 100vw"
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
+        className={[
+          "product-parallax-image object-cover",
+          loaded ? "opacity-100" : "opacity-0",
+          className || ""
+        ].join(" ")}
+      />
+    </span>
+  );
 }

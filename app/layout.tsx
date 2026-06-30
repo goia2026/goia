@@ -3,11 +3,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "GOIA Huqqa Lounge",
-  description: "Premium digital menu for GOIA Huqqa Lounge",
-  applicationName: "GOIA Menu",
+  description: "Carte digitale premium de GOIA Huqqa Lounge",
+  applicationName: "Carte GOIA",
   appleWebApp: {
     capable: true,
-    title: "GOIA Menu",
+    title: "Carte GOIA",
     statusBarStyle: "black-translucent"
   },
   formatDetection: {
@@ -30,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="fr">
       <body>{children}</body>
     </html>
   );

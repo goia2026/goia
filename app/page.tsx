@@ -46,6 +46,50 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type View = "home" | "menu" | "favorites" | "admin";
 type CategoryLabels = typeof categoryLabels;
+type AppCopy = {
+  followTitle: string;
+  followSubtitle: string;
+  reviewTitle: string;
+  reviewSubtitle: string;
+  heroSummary: (products: number, categories: number) => string;
+  googleReview: string;
+  categoryEyebrow: string;
+  categoryTitle: string;
+  categoryText: string;
+  selections: string;
+  readyProducts: string;
+  featuredEyebrow: string;
+  featuredTitle: string;
+  section: string;
+  empty: string;
+  productSlot: string;
+  readyToAdd: string;
+  addFromStudio: string;
+  menuFallback: string;
+  premiumSmoke: string;
+  goiaSelection: string;
+  chichaIntro: string;
+  items: string;
+  featuredBadge: string;
+  signatureBadge: string;
+  signatureMixes: string;
+  classicFlavors: string;
+  photoReserved: string;
+  instagramTitle: string;
+  instagramText: string;
+  adminDescription: string;
+  reset: string;
+  add: string;
+  categories: string;
+  categoryArchitecture: string;
+  uploadImage: string;
+  imageUrl: string;
+  description: string;
+  category: string;
+  unavailable: string;
+  available: string;
+  delete: string;
+};
 
 const reviewUrl =
   "https://www.google.com/maps/place//data=!4m3!3m2!1s0x4796cf800b7cf257:0x871ef082619b267!12e1?source=g.page.m._&laa=merchant-review-solicitation";
@@ -59,6 +103,7 @@ const currency = new Intl.NumberFormat("fr-FR", {
 
 const luxuryEase = [0.16, 1, 0.3, 1] as const;
 const storageVersion = "goia-luxury-v3";
+const localeStorageKey = "goia:locale";
 
 const blankProduct = (): Product => ({
   id: `goia-${Date.now()}`,
@@ -70,14 +115,159 @@ const blankProduct = (): Product => ({
   available: true,
   name: { en: "New Product", fr: "Nouveau Produit", de: "Neues Produkt" },
   description: {
-    en: "Add a short premium description.",
+    en: "Add a short, premium description.",
     fr: "Ajoutez une description courte et premium.",
-    de: "Eine kurze Premium-Beschreibung."
+    de: "Füge eine kurze, hochwertige Beschreibung hinzu."
   }
 });
 
+const appCopy: Record<Locale, AppCopy> = {
+  fr: {
+    followTitle: "Suivre GOIA sur Instagram",
+    followSubtitle: "Découvrez nos derniers événements, cocktails et l’atmosphère du lounge.",
+    reviewTitle: "Laisser un avis Google",
+    reviewSubtitle: "Partagez votre expérience chez GOIA.",
+    heroSummary: (products: number, categories: number) =>
+      `${products} sélections dans ${categories} catégories.`,
+    googleReview: "Avis Google",
+    categoryEyebrow: "Carte GOIA",
+    categoryTitle: "Catégories premium",
+    categoryText: "Neuf sections raffinées, prêtes pour la sélection GOIA.",
+    selections: "sélections",
+    readyProducts: "À venir",
+    featuredEyebrow: "Nos incontournables",
+    featuredTitle: "Les incontournables GOIA",
+    section: "Section",
+    empty: "À venir",
+    productSlot: "Emplacement produit",
+    readyToAdd: "À venir",
+    addFromStudio: "Ajoutez le nom, le prix, l’image et la disponibilité depuis le Studio GOIA.",
+    menuFallback: "La carte",
+    premiumSmoke: "Chichas premium",
+    goiaSelection: "Sélection GOIA",
+    chichaIntro: "Service chicha GOIA avec présentation raffinée et tous les parfums disponibles.",
+    items: "produits",
+    featuredBadge: "Incontournable",
+    signatureBadge: "Signature",
+    signatureMixes: "Mixes Signature",
+    classicFlavors: "Saveurs classiques",
+    photoReserved: "Photo à venir",
+    instagramTitle: "GOIA après la nuit",
+    instagramText: "Suivez le lounge pour découvrir nos nouveautés, soirées et moments GOIA.",
+    adminDescription:
+      "Modifiez les catégories, produits, images, prix, mises en avant et disponibilités.",
+    reset: "Réinitialiser",
+    add: "Ajouter",
+    categories: "Catégories",
+    categoryArchitecture: "Architecture de la carte",
+    uploadImage: "Ajouter une image",
+    imageUrl: "URL de l’image",
+    description: "Description",
+    category: "Catégorie",
+    unavailable: "Indisponible",
+    available: "Disponible",
+    delete: "Supprimer"
+  },
+  de: {
+    followTitle: "GOIA auf Instagram folgen",
+    followSubtitle: "Entdecke unsere neuesten Events, Cocktails und die Lounge-Atmosphäre.",
+    reviewTitle: "Google Bewertung abgeben",
+    reviewSubtitle: "Teile deine Erfahrung bei GOIA.",
+    heroSummary: (products: number, categories: number) =>
+      `${products} Auswahlmöglichkeiten in ${categories} Kategorien.`,
+    googleReview: "Google Bewertung",
+    categoryEyebrow: "GOIA Karte",
+    categoryTitle: "Premium-Kategorien",
+    categoryText: "Neun raffinierte Bereiche, vorbereitet für die GOIA Auswahl.",
+    selections: "Auswahl",
+    readyProducts: "Demnächst",
+    featuredEyebrow: "Unsere Highlights",
+    featuredTitle: "GOIA Highlights",
+    section: "Bereich",
+    empty: "Demnächst",
+    productSlot: "Produktplatz",
+    readyToAdd: "Demnächst",
+    addFromStudio: "Name, Preis, Bild und Verfügbarkeit im GOIA Studio hinzufügen.",
+    menuFallback: "Die Karte",
+    premiumSmoke: "Premium Shishas",
+    goiaSelection: "GOIA Auswahl",
+    chichaIntro: "GOIA Shisha-Service mit edler Präsentation und allen verfügbaren Sorten.",
+    items: "Produkte",
+    featuredBadge: "Highlight",
+    signatureBadge: "Signature",
+    signatureMixes: "Signature Mixes",
+    classicFlavors: "Klassische Sorten",
+    photoReserved: "Foto folgt",
+    instagramTitle: "GOIA nach Einbruch der Nacht",
+    instagramText: "Folge der Lounge für Neuheiten, Abende und GOIA Momente.",
+    adminDescription:
+      "Kategorien, Produkte, Bilder, Preise, Highlights und Verfügbarkeiten bearbeiten.",
+    reset: "Zurücksetzen",
+    add: "Hinzufügen",
+    categories: "Kategorien",
+    categoryArchitecture: "Kartenstruktur",
+    uploadImage: "Bild hinzufügen",
+    imageUrl: "Bild-URL",
+    description: "Beschreibung",
+    category: "Kategorie",
+    unavailable: "Nicht verfügbar",
+    available: "Verfügbar",
+    delete: "Löschen"
+  },
+  en: {
+    followTitle: "Follow GOIA on Instagram",
+    followSubtitle: "Discover our latest events, cocktails and lounge atmosphere.",
+    reviewTitle: "Leave a Google Review",
+    reviewSubtitle: "Share your experience with GOIA.",
+    heroSummary: (products: number, categories: number) =>
+      `${products} selections across ${categories} categories.`,
+    googleReview: "Google Review",
+    categoryEyebrow: "GOIA Menu",
+    categoryTitle: "Premium categories",
+    categoryText: "Nine refined sections, prepared for the GOIA selection.",
+    selections: "selections",
+    readyProducts: "Coming soon",
+    featuredEyebrow: "Featured",
+    featuredTitle: "GOIA signatures",
+    section: "Section",
+    empty: "Coming soon",
+    productSlot: "Product slot",
+    readyToAdd: "Coming soon",
+    addFromStudio: "Add name, price, image and availability from GOIA Studio.",
+    menuFallback: "The menu",
+    premiumSmoke: "Premium hookahs",
+    goiaSelection: "GOIA Selection",
+    chichaIntro: "GOIA hookah service with refined presentation and all available flavors.",
+    items: "items",
+    featuredBadge: "Featured",
+    signatureBadge: "Signature",
+    signatureMixes: "Signature Mixes",
+    classicFlavors: "Classic Flavors",
+    photoReserved: "Photo reserved",
+    instagramTitle: "GOIA after dark",
+    instagramText: "Follow the lounge for new flavors, evenings and GOIA moments.",
+    adminDescription:
+      "Edit categories, products, images, pricing, featured placement and availability.",
+    reset: "Reset",
+    add: "Add",
+    categories: "Categories",
+    categoryArchitecture: "Menu architecture",
+    uploadImage: "Upload image",
+    imageUrl: "Image URL",
+    description: "Description",
+    category: "Category",
+    unavailable: "Unavailable",
+    available: "Available",
+    delete: "Delete"
+  }
+};
+
 function isCategory(value: string): value is Category {
   return categoryOrder.includes(value as Category);
+}
+
+function isLocale(value: string): value is Locale {
+  return value === "fr" || value === "de" || value === "en";
 }
 
 function normalizeProduct(product: Product, index = 0): Product {
@@ -117,7 +307,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [entered, setEntered] = useState(false);
   const [view, setView] = useState<View>("home");
-  const [locale, setLocale] = useState<Locale>("en");
+  const [locale, setLocale] = useState<Locale>("fr");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category | "all">("chichas");
   const [products, setProducts] = useState<Product[]>(initialProducts.map(normalizeProduct));
@@ -132,6 +322,11 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    const savedLocale = window.localStorage.getItem(localeStorageKey);
+    if (savedLocale && isLocale(savedLocale)) {
+      setLocale(savedLocale);
+    }
+
     if (window.localStorage.getItem("goia:version") !== storageVersion) {
       window.localStorage.removeItem("goia:products");
       window.localStorage.removeItem("goia:categories");
@@ -142,6 +337,10 @@ export default function HomePage() {
     setLabels(readJson<CategoryLabels>("goia:categories", categoryLabels));
     setProducts(readJson<Product[]>("goia:products", initialProducts).map(normalizeProduct));
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(localeStorageKey, locale);
+  }, [locale]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -286,10 +485,15 @@ export default function HomePage() {
 
       <AnimatePresence mode="wait">
         {!entered ? (
-          <Landing key="landing" locale={locale} setLocale={setLocale} onEnter={enterLounge} />
+          <Landing
+            key={`landing-${locale}`}
+            locale={locale}
+            setLocale={setLocale}
+            onEnter={enterLounge}
+          />
         ) : (
           <motion.section
-            key="app"
+            key={`app-${locale}`}
             initial={{ opacity: 0, y: 18, filter: "blur(12px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: -10, filter: "blur(10px)" }}
@@ -304,7 +508,7 @@ export default function HomePage() {
                 labels={labels}
                 products={visibleProducts}
                 title={view === "admin" ? t.editMenu : view === "favorites" ? t.favorites : t.menu}
-                subtitle={view === "admin" ? "GOIA Studio" : "GOIA Huqqa Lounge"}
+                subtitle={view === "admin" ? "Studio GOIA" : "GOIA Huqqa Lounge"}
               />
 
               {view !== "admin" && (
@@ -436,6 +640,7 @@ function Landing({
   onEnter: () => void;
 }) {
   const t = uiCopy[locale];
+  const c = appCopy[locale];
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoResetTimeoutRef = useRef<number | null>(null);
 
@@ -591,14 +796,14 @@ function Landing({
           <LandingActionCard
             href={instagramUrl}
             icon={<Instagram size={20} />}
-            title="Follow GOIA"
-            subtitle="Discover our latest events, cocktails and lounge atmosphere."
+            title={c.followTitle}
+            subtitle={c.followSubtitle}
           />
           <LandingActionCard
             href={reviewUrl}
             icon={<Star size={20} />}
-            title="Leave a Google Review"
-            subtitle="Share your experience with GOIA."
+            title={c.reviewTitle}
+            subtitle={c.reviewSubtitle}
           />
         </motion.div>
       </motion.div>
@@ -658,7 +863,11 @@ function Header({
       <div className="glass mx-auto flex max-w-7xl items-center justify-between rounded-[1.75rem] px-4 py-3 sm:rounded-full">
         <GoiaLogo compact />
         <div className="flex items-center gap-2">
-          <SocialButton href={reviewUrl} label="Google Reviews" icon={<Star size={17} />} />
+          <SocialButton
+            href={reviewUrl}
+            label={appCopy[locale].reviewTitle}
+            icon={<Star size={17} />}
+          />
           <SocialButton href={instagramUrl} label="Instagram" icon={<Instagram size={17} />} />
           <LanguageSwitch locale={locale} setLocale={setLocale} />
         </div>
@@ -681,6 +890,7 @@ function AppHero({
   subtitle: string;
 }) {
   const categoriesInUse = new Set(products.map((product) => labels[product.category][locale]));
+  const c = appCopy[locale];
 
   return (
     <motion.div
@@ -698,7 +908,7 @@ function AppHero({
       </div>
       <div className="glass rounded-[1.5rem] p-5">
         <p className="text-sm leading-6 text-white/58">
-          {products.length} selections across {categoriesInUse.size} curated categories.
+          {c.heroSummary(products.length, categoriesInUse.size)}
         </p>
         <div className="mt-4 flex items-center gap-3">
           <a
@@ -708,7 +918,7 @@ function AppHero({
             className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-white text-sm font-semibold text-ink"
           >
             <Star size={16} />
-            Google
+            {c.googleReview}
           </a>
           <a
             href={instagramUrl}
@@ -754,19 +964,28 @@ function LanguageSwitch({
   locale: Locale;
   setLocale: (locale: Locale) => void;
 }) {
+  const languages: Array<{ id: Locale; label: string; short: string }> = [
+    { id: "fr", label: "Français", short: "🇫🇷" },
+    { id: "de", label: "Deutsch", short: "🇩🇪" },
+    { id: "en", label: "English", short: "🇬🇧" }
+  ];
+
   return (
-    <div className="glass flex h-11 items-center rounded-full px-1">
-      <Globe2 className="ml-3 mr-1 text-taupe" size={16} />
-      {(["en", "fr", "de"] as Locale[]).map((item) => (
+    <div className="glass flex min-h-11 items-center rounded-full border border-[#C8A45B]/18 px-1.5 py-1 shadow-[0_16px_55px_rgba(0,0,0,0.28)]">
+      <Globe2 className="ml-2 mr-1 hidden text-[#C8A45B] sm:block" size={16} />
+      {languages.map((item) => (
         <button
-          key={item}
-          onClick={() => setLocale(item)}
+          key={item.id}
+          onClick={() => setLocale(item.id)}
           className={[
-            "h-8 rounded-full px-3 text-xs font-medium uppercase transition",
-            locale === item ? "bg-white text-ink" : "text-white/62 hover:text-white"
+            "flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition sm:px-3",
+            locale === item.id
+              ? "bg-[#C8A45B] text-black shadow-[0_0_24px_rgba(200,164,91,0.24)]"
+              : "text-white/62 hover:bg-white/8 hover:text-white"
           ].join(" ")}
         >
-          {item}
+          <span>{item.short}</span>
+          <span className="hidden sm:inline">{item.label}</span>
         </button>
       ))}
     </div>
@@ -796,79 +1015,159 @@ function SocialButton({
   );
 }
 
-const categoryDescriptions: Record<Category, string> = {
-  chichas: "Refined smoke rituals and premium lounge blends.",
-  cocktails: "Elegant classics, house creations and golden-hour serves.",
-  mocktails: "Alcohol-free compositions with depth, freshness and polish.",
-  milkshakes: "Velvet textures, dessert notes and indulgent finishes.",
-  smoothies: "Fresh fruit, chilled textures and clean lounge energy.",
-  spiritueux: "Premium bottles, refined pours and after-dark selections.",
-  boissons: "Soft drinks, waters and refreshing table essentials.",
-  desserts: "Sweet finales designed for sharing and late evenings.",
-  "goia-signatures": "The most distinctive GOIA creations and house favorites."
+const categoryDescriptions: Record<Category, Record<Locale, string>> = {
+  chichas: {
+    fr: "Rituels raffinés, fumée douce et mélanges premium.",
+    de: "Raffinierte Rituale, sanfter Rauch und Premium-Mischungen.",
+    en: "Refined rituals, smooth smoke and premium blends."
+  },
+  cocktails: {
+    fr: "Classiques élégants, créations maison et services dorés.",
+    de: "Elegante Klassiker, Hauskreationen und goldene Serves.",
+    en: "Elegant classics, house creations and golden serves."
+  },
+  mocktails: {
+    fr: "Compositions sans alcool, fraîches et parfaitement travaillées.",
+    de: "Alkoholfreie Kompositionen, frisch und fein abgestimmt.",
+    en: "Alcohol-free compositions, fresh and carefully crafted."
+  },
+  milkshakes: {
+    fr: "Textures veloutées, notes gourmandes et finitions dessert.",
+    de: "Samtige Texturen, süße Noten und Dessert-Finishes.",
+    en: "Velvet textures, sweet notes and dessert finishes."
+  },
+  smoothies: {
+    fr: "Fruits frais, fraîcheur légère et énergie lounge.",
+    de: "Frische Früchte, leichte Frische und Lounge-Energie.",
+    en: "Fresh fruit, light freshness and lounge energy."
+  },
+  spiritueux: {
+    fr: "Bouteilles premium, services raffinés et sélections nocturnes.",
+    de: "Premium-Flaschen, raffinierte Serves und Abendselektionen.",
+    en: "Premium bottles, refined serves and after-dark selections."
+  },
+  boissons: {
+    fr: "Boissons fraîches, eaux et essentiels de table.",
+    de: "Erfrischungen, Wasser und Tischklassiker.",
+    en: "Fresh drinks, waters and table essentials."
+  },
+  desserts: {
+    fr: "Douceurs finales pensées pour le partage.",
+    de: "Süße Abschlüsse, gemacht zum Teilen.",
+    en: "Sweet finales designed for sharing."
+  },
+  "goia-signatures": {
+    fr: "Les créations les plus distinctives de la maison GOIA.",
+    de: "Die markantesten Kreationen des Hauses GOIA.",
+    en: "The most distinctive creations from GOIA."
+  }
 };
 
 const signatureMixes = [
   {
     name: "Black Nana",
-    notes: "Menthe fraîche • Raisin noir"
+    notes: {
+      fr: "Menthe fraîche • Raisin noir",
+      de: "Frische Minze • Schwarze Traube",
+      en: "Fresh mint • Black grape"
+    }
   },
   {
     name: "Mi Amor",
-    notes: "Banane • Ananas • Menthe"
+    notes: {
+      fr: "Banane • Ananas • Menthe",
+      de: "Banane • Ananas • Minze",
+      en: "Banana • Pineapple • Mint"
+    }
   },
   {
     name: "Watermelon",
-    notes: "Menthe • Pastèque"
+    notes: {
+      fr: "Menthe • Pastèque",
+      de: "Minze • Wassermelone",
+      en: "Mint • Watermelon"
+    }
   },
   {
     name: "Love 66",
-    notes: "Melon • Pastèque • Fruit de la passion",
-    badge: "Best Seller"
+    notes: {
+      fr: "Melon • Pastèque • Fruit de la passion",
+      de: "Melone • Wassermelone • Passionsfrucht",
+      en: "Melon • Watermelon • Passion fruit"
+    },
+    badge: "featured"
   },
   {
     name: "Hawaï",
-    notes: "Mangue • Ananas • Menthe"
+    notes: {
+      fr: "Mangue • Ananas • Menthe",
+      de: "Mango • Ananas • Minze",
+      en: "Mango • Pineapple • Mint"
+    }
   },
   {
     name: "Fraise Banane",
-    notes: "Fraise • Banane"
+    notes: {
+      fr: "Fraise • Banane",
+      de: "Erdbeere • Banane",
+      en: "Strawberry • Banana"
+    }
   },
   {
     name: "Lady Killer",
-    notes: "Mangue • Melon • Fraise",
-    badge: "Best Seller"
+    notes: {
+      fr: "Mangue • Melon • Fraise",
+      de: "Mango • Melone • Erdbeere",
+      en: "Mango • Melon • Strawberry"
+    },
+    badge: "featured"
   },
   {
     name: "Menthe Mangue",
-    notes: "Mangue • Ananas"
+    notes: {
+      fr: "Mangue • Ananas",
+      de: "Mango • Ananas",
+      en: "Mango • Pineapple"
+    }
   },
   {
     name: "African Queen",
-    notes: "Cocktail de fruits frais sucrés",
-    badge: "Signature"
+    notes: {
+      fr: "Cocktail de fruits frais sucrés",
+      de: "Süßer Cocktail aus frischen Früchten",
+      en: "Sweet cocktail of fresh fruits"
+    },
+    badge: "signature"
   },
   {
     name: "Ice Kaktus",
-    notes: "Kaktus glacé"
+    notes: {
+      fr: "Kaktus glacé",
+      de: "Eisgekühlter Kaktus",
+      en: "Iced cactus"
+    }
   },
   {
     name: "Blue Mistery",
-    notes: "Myrtilles • Menthe légère"
+    notes: {
+      fr: "Myrtilles • Menthe légère",
+      de: "Blaubeeren • Leichte Minze",
+      en: "Blueberries • Light mint"
+    }
   }
 ];
 
 const classicChichaFlavors = [
-  "Menthe",
-  "Menthe Sucrée",
-  "Double Pomme",
-  "Framboise",
-  "Kiwi",
-  "Citron",
-  "Arlequin",
-  "Ananas",
-  "Pomme Sucrée",
-  "Pêche"
+  { fr: "Menthe", de: "Minze", en: "Mint" },
+  { fr: "Menthe Sucrée", de: "Süße Minze", en: "Sweet Mint" },
+  { fr: "Double Pomme", de: "Doppelapfel", en: "Double Apple" },
+  { fr: "Framboise", de: "Himbeere", en: "Raspberry" },
+  { fr: "Kiwi", de: "Kiwi", en: "Kiwi" },
+  { fr: "Citron", de: "Zitrone", en: "Lemon" },
+  { fr: "Arlequin", de: "Harlekin", en: "Harlequin" },
+  { fr: "Ananas", de: "Ananas", en: "Pineapple" },
+  { fr: "Pomme Sucrée", de: "Süßer Apfel", en: "Sweet Apple" },
+  { fr: "Pêche", de: "Pfirsich", en: "Peach" }
 ];
 
 function getCategoryIcon(category: Category) {
@@ -909,6 +1208,7 @@ function CategoryCards({
   products: Product[];
   setCategory: (category: Category | "all") => void;
 }) {
+  const c = appCopy[locale];
   const categoryCards = categoryOrder.map((item) => {
     const categoryProducts = products.filter((product) => product.category === item);
     return {
@@ -916,7 +1216,7 @@ function CategoryCards({
       image: categoryProducts[0]?.image || products[0]?.image || "",
       count: categoryProducts.length,
       label: labels[item][locale],
-      description: categoryDescriptions[item]
+      description: categoryDescriptions[item][locale]
     };
   });
 
@@ -924,13 +1224,13 @@ function CategoryCards({
     <section className="grid gap-4">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">GOIA Menu</p>
+          <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">{c.categoryEyebrow}</p>
           <h2 className="mt-2 text-3xl font-semibold leading-tight text-white sm:text-4xl">
-            Premium categories
+            {c.categoryTitle}
           </h2>
         </div>
         <p className="hidden max-w-xs text-right text-sm leading-6 text-white/46 sm:block">
-          Nine refined sections, prepared for the GOIA lounge selection.
+          {c.categoryText}
         </p>
       </div>
 
@@ -940,6 +1240,8 @@ function CategoryCards({
             key={item.id}
             active={category === item.id}
             count={item.count}
+            countLabel={c.selections}
+            readyLabel={c.readyProducts}
             description={item.description}
             image={item.image}
             icon={getCategoryIcon(item.id)}
@@ -956,6 +1258,8 @@ function CategoryCards({
 function CategoryCard({
   active,
   count,
+  countLabel,
+  readyLabel,
   description,
   eyebrow,
   image,
@@ -965,6 +1269,8 @@ function CategoryCard({
 }: {
   active: boolean;
   count: number;
+  countLabel: string;
+  readyLabel: string;
   description: string;
   eyebrow: string;
   image: string;
@@ -1013,7 +1319,7 @@ function CategoryCard({
         </div>
         <div>
           <p className="text-[0.68rem] uppercase tracking-[0.28em] text-[#C8A45B]">
-            {count > 0 ? `${count} selections` : "Ready for products"}
+            {count > 0 ? `${count} ${countLabel}` : readyLabel}
           </p>
           <h3 className="mt-2 text-2xl font-semibold leading-none text-white">{label}</h3>
           <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/54">{description}</p>
@@ -1038,12 +1344,14 @@ function FeaturedProducts({
   onOpen: (product: Product) => void;
   onToggleFavorite: (id: string) => void;
 }) {
+  const c = appCopy[locale];
+
   return (
     <section className="grid gap-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-taupe">Featured</p>
-          <h2 className="mt-1 text-2xl font-semibold text-white">Signature moments</h2>
+          <p className="text-xs uppercase tracking-[0.24em] text-taupe">{c.featuredEyebrow}</p>
+          <h2 className="mt-1 text-2xl font-semibold text-white">{c.featuredTitle}</h2>
         </div>
         <BadgeCheck className="text-taupe" size={24} />
       </div>
@@ -1110,15 +1418,19 @@ function ProductGrid({
   onOpen: (product: Product) => void;
   onToggleFavorite: (id: string) => void;
 }) {
+  const c = appCopy[locale];
+
   if (!products.length) {
     const placeholderTitle = activeCategory ? labels[activeCategory][locale] : "GOIA";
-    const placeholderDescription = activeCategory ? categoryDescriptions[activeCategory] : emptyText;
+    const placeholderDescription = activeCategory
+      ? categoryDescriptions[activeCategory][locale]
+      : emptyText;
 
     return (
       <section className="grid gap-4">
         <div className="flex items-end justify-between gap-4 border-t border-[#C8A45B]/18 pt-6">
           <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">Section</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">{c.section}</p>
             <h2 className="mt-2 text-3xl font-semibold leading-tight text-white sm:text-4xl">
               {placeholderTitle}
             </h2>
@@ -1127,7 +1439,7 @@ function ProductGrid({
             </p>
           </div>
           <span className="hidden rounded-full border border-[#C8A45B]/25 bg-[#C8A45B]/10 px-4 py-2 text-sm text-[#F2D991] backdrop-blur-xl sm:inline-flex">
-            Empty
+            {c.empty}
           </span>
         </div>
 
@@ -1147,11 +1459,11 @@ function ProductGrid({
                 </span>
                 <div>
                   <p className="text-xs uppercase tracking-[0.24em] text-[#C8A45B]">
-                    Product slot
+                    {c.productSlot}
                   </p>
-                  <h3 className="mt-2 text-xl font-semibold text-white">Ready to add</h3>
+                  <h3 className="mt-2 text-xl font-semibold text-white">{c.readyToAdd}</h3>
                   <p className="mt-2 text-sm leading-6 text-white/50">
-                    Add name, price, image and availability from GOIA Studio.
+                    {c.addFromStudio}
                   </p>
                 </div>
               </div>
@@ -1162,7 +1474,7 @@ function ProductGrid({
     );
   }
 
-  const sectionTitle = activeCategory ? labels[activeCategory][locale] : "The menu";
+  const sectionTitle = activeCategory ? labels[activeCategory][locale] : c.menuFallback;
   const isChichasPage = activeCategory === "chichas";
 
   return (
@@ -1170,19 +1482,19 @@ function ProductGrid({
       <div className="flex items-end justify-between gap-4 border-t border-[#C8A45B]/18 pt-6">
         <div>
           <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">
-            {isChichasPage ? "Premium Smoke" : "GOIA Selection"}
+            {isChichasPage ? c.premiumSmoke : c.goiaSelection}
           </p>
           <h2 className="mt-2 text-3xl font-semibold leading-tight text-white sm:text-4xl">
             {sectionTitle}
           </h2>
           {isChichasPage && (
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/54">
-              Classic GOIA chicha service with refined presentation and all available flavors.
+              {c.chichaIntro}
             </p>
           )}
         </div>
         <p className="rounded-full border border-[#C8A45B]/25 bg-[#C8A45B]/10 px-4 py-2 text-sm text-[#F2D991] backdrop-blur-xl">
-          {products.length} items
+          {products.length} {c.items}
         </p>
       </div>
 
@@ -1208,7 +1520,7 @@ function ProductGrid({
                     className="h-full w-full transition duration-700 group-hover:scale-105"
                   />
                 ) : (
-                  <ProductPhotoPlaceholder />
+                  <ProductPhotoPlaceholder label={c.photoReserved} />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/10 to-transparent" />
                 <button
@@ -1224,9 +1536,10 @@ function ProductGrid({
                     fill={favorites.includes(product.id) ? "currentColor" : "none"}
                   />
                 </button>
-                {(product.signature || product.featured) && (
+                {(product.badge || product.signature || product.featured) && (
                   <span className="absolute bottom-4 left-4 rounded-full border border-[#C8A45B]/35 bg-[#C8A45B]/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-black">
-                    {product.signature ? "Signature" : "Featured"}
+                    {product.badge ||
+                      (product.signature ? c.signatureBadge : c.featuredBadge)}
                   </span>
                 )}
               </div>
@@ -1251,12 +1564,14 @@ function ProductGrid({
         </AnimatePresence>
       </motion.div>
 
-      {isChichasPage && <ChichaFlavorSection />}
+      {isChichasPage && <ChichaFlavorSection locale={locale} />}
     </section>
   );
 }
 
-function ChichaFlavorSection() {
+function ChichaFlavorSection({ locale }: { locale: Locale }) {
+  const c = appCopy[locale];
+
   return (
     <div className="grid gap-5">
       <motion.section
@@ -1269,7 +1584,7 @@ function ChichaFlavorSection() {
         <div className="relative">
           <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">GOIA Chichas</p>
           <h3 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
-            Signature Mixes
+            {c.signatureMixes}
           </h3>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {signatureMixes.map((mix, index) => (
@@ -1289,13 +1604,13 @@ function ChichaFlavorSection() {
                     </span>
                     {mix.badge && (
                       <span className="rounded-full border border-[#C8A45B]/40 bg-[#C8A45B]/12 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-[#F2D991]">
-                        {mix.badge}
+                        {mix.badge === "signature" ? c.signatureBadge : c.featuredBadge}
                       </span>
                     )}
                   </div>
                   <div>
                     <h4 className="text-xl font-semibold leading-tight text-white">{mix.name}</h4>
-                    <p className="mt-2 text-sm leading-6 text-white/58">{mix.notes}</p>
+                    <p className="mt-2 text-sm leading-6 text-white/58">{mix.notes[locale]}</p>
                   </div>
                 </div>
               </motion.article>
@@ -1314,18 +1629,18 @@ function ChichaFlavorSection() {
         <div className="relative">
           <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">GOIA Chichas</p>
           <h3 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
-            Classic Flavors
+            {c.classicFlavors}
           </h3>
           <div className="mt-5 flex flex-wrap gap-2.5">
             {classicChichaFlavors.map((flavor, index) => (
               <motion.span
-                key={flavor}
+                key={flavor.fr}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.035, duration: 0.35, ease: luxuryEase }}
                 className="rounded-full border border-[#C8A45B]/48 bg-[#C8A45B]/8 px-4 py-2 text-sm font-medium text-[#F2D991] shadow-[0_0_28px_rgba(200,164,91,0.08)] backdrop-blur-xl"
               >
-                {flavor}
+                {flavor[locale]}
               </motion.span>
             ))}
           </div>
@@ -1335,7 +1650,13 @@ function ChichaFlavorSection() {
   );
 }
 
-function ProductPhotoPlaceholder({ compact = false }: { compact?: boolean }) {
+function ProductPhotoPlaceholder({
+  compact = false,
+  label = appCopy.fr.photoReserved
+}: {
+  compact?: boolean;
+  label?: string;
+}) {
   return (
     <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_50%_36%,rgba(200,164,91,0.20),rgba(0,0,0,0.88)_58%)]">
       <div className="grid place-items-center gap-3 text-center">
@@ -1348,7 +1669,7 @@ function ProductPhotoPlaceholder({ compact = false }: { compact?: boolean }) {
           <Cloud size={compact ? 22 : 28} strokeWidth={1.6} />
         </span>
         <span className="text-xs uppercase tracking-[0.24em] text-[#C8A45B]">
-          Photo reserved
+          {label}
         </span>
       </div>
     </div>
@@ -1370,6 +1691,8 @@ function ProductGallery({
   onClose: () => void;
   onToggleFavorite: (id: string) => void;
 }) {
+  const c = appCopy[locale];
+
   return (
     <AnimatePresence>
       {product && (
@@ -1390,7 +1713,7 @@ function ProductGallery({
               {product.image ? (
                 <ProductImage src={product.image} alt={product.name[locale]} className="h-full w-full" />
               ) : (
-                <ProductPhotoPlaceholder />
+                <ProductPhotoPlaceholder label={c.photoReserved} />
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-transparent to-black/24" />
             </div>
@@ -1428,15 +1751,17 @@ function ProductGallery({
 }
 
 function InstagramPanel({ locale }: { locale: Locale }) {
+  const c = appCopy[locale];
+
   return (
     <section className="glass grid gap-5 rounded-[2rem] p-5 sm:grid-cols-[1fr_auto] sm:items-center">
       <div>
         <p className="text-xs uppercase tracking-[0.24em] text-taupe">
           {uiCopy[locale].instagram}
         </p>
-        <h2 className="mt-2 text-2xl font-semibold text-white">GOIA after dark</h2>
+        <h2 className="mt-2 text-2xl font-semibold text-white">{c.instagramTitle}</h2>
         <p className="mt-2 text-sm leading-6 text-white/58">
-          Follow the lounge for new flavors, evenings and table moments.
+          {c.instagramText}
         </p>
       </div>
       <a
@@ -1476,15 +1801,16 @@ function AdminDashboard({
   onUpdateProduct: (id: string, patch: Partial<Product>) => void;
 }) {
   const t = uiCopy[locale];
+  const c = appCopy[locale];
 
   return (
     <div className="grid gap-5">
       <div className="glass flex flex-wrap items-center justify-between gap-3 rounded-[1.75rem] px-5 py-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-taupe">GOIA Studio</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-taupe">Studio GOIA</p>
           <h2 className="mt-1 text-2xl font-semibold text-white">{t.editMenu}</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-white/52">
-            Edit categories, products, image uploads, pricing, featured placement and availability.
+            {c.adminDescription}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1496,14 +1822,14 @@ function AdminDashboard({
             className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 px-4 text-sm text-white/72 transition hover:border-taupe/50 hover:bg-white/10 hover:text-white"
           >
             <RotateCcw size={16} />
-            Reset
+            {c.reset}
           </button>
           <button
             onClick={onAddProduct}
             className="inline-flex h-11 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-ink transition hover:bg-porcelain"
           >
             <Plus size={16} />
-            Add
+            {c.add}
           </button>
         </div>
       </div>
@@ -1536,12 +1862,14 @@ function CategoryEditor({
   labels: CategoryLabels;
   onUpdate: (categoryId: Category, labels: Partial<Record<Locale, string>>) => void;
 }) {
+  const c = appCopy[locale];
+
   return (
     <section className="glass rounded-[1.75rem] p-5">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-taupe">Categories</p>
-          <h3 className="mt-1 text-xl font-semibold text-white">Menu architecture</h3>
+          <p className="text-xs uppercase tracking-[0.24em] text-taupe">{c.categories}</p>
+          <h3 className="mt-1 text-xl font-semibold text-white">{c.categoryArchitecture}</h3>
         </div>
         <Edit3 className="text-taupe" size={20} />
       </div>
@@ -1584,6 +1912,8 @@ function AdminProductEditor({
     if (file) onImageUpload(product, file);
     event.target.value = "";
   }
+  const t = uiCopy[locale];
+  const c = appCopy[locale];
 
   return (
     <article className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.045]">
@@ -1593,7 +1923,7 @@ function AdminProductEditor({
             {product.image ? (
               <ProductImage src={product.image} alt={product.name[locale]} className="h-full w-full" />
             ) : (
-              <ProductPhotoPlaceholder compact />
+              <ProductPhotoPlaceholder compact label={c.photoReserved} />
             )}
             <div className="absolute left-3 top-3 rounded-full bg-black/45 px-3 py-1 text-xs uppercase tracking-[0.18em] text-white backdrop-blur-xl">
               {labels[product.category][locale]}
@@ -1601,11 +1931,11 @@ function AdminProductEditor({
           </div>
           <label className="inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-white text-sm font-semibold text-ink">
             <Upload size={16} />
-            Upload image
+            {c.uploadImage}
             <input type="file" accept="image/*" onChange={handleUpload} className="sr-only" />
           </label>
           <label className="grid gap-2 text-xs uppercase tracking-[0.18em] text-white/42">
-            Image URL
+            {c.imageUrl}
             <span className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3">
               <ImageIcon size={16} className="text-taupe" />
               <input
@@ -1620,7 +1950,7 @@ function AdminProductEditor({
         <div className="grid gap-4">
           <div className="grid gap-3 sm:grid-cols-[1fr_10rem_10rem]">
             <label className="grid gap-2 text-xs uppercase tracking-[0.18em] text-white/42">
-              Product
+              {t.product}
               <input
                 value={product.name[locale]}
                 onChange={(event) =>
@@ -1632,7 +1962,7 @@ function AdminProductEditor({
               />
             </label>
             <label className="grid gap-2 text-xs uppercase tracking-[0.18em] text-white/42">
-              Price
+              {t.price}
               <input
                 type="number"
                 min="0"
@@ -1645,7 +1975,7 @@ function AdminProductEditor({
               />
             </label>
             <label className="grid gap-2 text-xs uppercase tracking-[0.18em] text-white/42">
-              Category
+              {c.category}
               <select
                 value={product.category}
                 onChange={(event) =>
@@ -1663,7 +1993,7 @@ function AdminProductEditor({
           </div>
 
           <label className="grid gap-2 text-xs uppercase tracking-[0.18em] text-white/42">
-            Description
+            {c.description}
             <textarea
               value={product.description[locale]}
               onChange={(event) =>
@@ -1679,17 +2009,17 @@ function AdminProductEditor({
             <div className="flex flex-wrap gap-2">
               <TogglePill
                 checked={Boolean(product.signature)}
-                label="Signature"
+                label={c.signatureBadge}
                 onChange={(checked) => onUpdateProduct(product.id, { signature: checked })}
               />
               <TogglePill
                 checked={Boolean(product.featured)}
-                label="Featured"
+                label={c.featuredBadge}
                 onChange={(checked) => onUpdateProduct(product.id, { featured: checked })}
               />
               <TogglePill
                 checked={product.available !== false}
-                label={product.available === false ? "Unavailable" : "Available"}
+                label={product.available === false ? c.unavailable : c.available}
                 onChange={(checked) => onUpdateProduct(product.id, { available: checked })}
                 icon={product.available === false ? <EyeOff size={16} /> : <Eye size={16} />}
               />
@@ -1700,14 +2030,14 @@ function AdminProductEditor({
                 className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 px-4 text-sm text-white/72 transition hover:border-taupe/50 hover:bg-white/10 hover:text-white"
               >
                 <Save size={16} />
-                Save
+                {t.save}
               </button>
               <button
                 onClick={() => onDeleteProduct(product.id)}
                 className="inline-flex h-11 items-center gap-2 rounded-full border border-red-400/20 px-4 text-sm text-red-100/72 transition hover:border-red-300/50 hover:bg-red-500/10 hover:text-red-50"
               >
                 <Trash2 size={16} />
-                Delete
+                {c.delete}
               </button>
             </div>
           </div>

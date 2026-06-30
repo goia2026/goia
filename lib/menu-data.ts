@@ -18,6 +18,7 @@ export type Product = {
   image: string;
   signature?: boolean;
   featured?: boolean;
+  badge?: string;
   available?: boolean;
   name: Record<Locale, string>;
   description: Record<Locale, string>;
@@ -36,13 +37,13 @@ export const categoryOrder: Category[] = [
 ];
 
 export const categoryLabels: Record<Category, Record<Locale, string>> = {
-  chichas: { en: "Chichas", fr: "Chichas", de: "Shishas" },
+  chichas: { en: "Hookahs", fr: "Chichas", de: "Shishas" },
   cocktails: { en: "Cocktails", fr: "Cocktails", de: "Cocktails" },
   mocktails: { en: "Mocktails", fr: "Mocktails", de: "Mocktails" },
   milkshakes: { en: "Milkshakes", fr: "Milkshakes", de: "Milkshakes" },
   smoothies: { en: "Smoothies", fr: "Smoothies", de: "Smoothies" },
-  spiritueux: { en: "Spiritueux", fr: "Spiritueux", de: "Spirituosen" },
-  boissons: { en: "Boissons", fr: "Boissons", de: "Getranke" },
+  spiritueux: { en: "Spirits", fr: "Spiritueux", de: "Spirituosen" },
+  boissons: { en: "Drinks", fr: "Boissons", de: "Getränke" },
   desserts: { en: "Desserts", fr: "Desserts", de: "Desserts" },
   "goia-signatures": {
     en: "GOIA Signatures",
@@ -54,11 +55,11 @@ export const categoryLabels: Record<Category, Record<Locale, string>> = {
 export const uiCopy = {
   en: {
     welcome: "Welcome to GOIA",
-    enter: "Enter the Lounge",
+    enter: "Explore the Menu",
     search: "Search the menu",
     favorites: "Favorites",
     all: "All",
-    admin: "Admin",
+    admin: "Administration",
     lounge: "Lounge",
     menu: "Menu",
     review: "Google Reviews",
@@ -68,40 +69,40 @@ export const uiCopy = {
     price: "Price",
     save: "Save",
     configured: "Supabase ready",
-    localMode: "Local preview mode",
+    localMode: "Local mode",
     empty: "No products yet"
   },
   fr: {
     welcome: "Bienvenue chez GOIA",
-    enter: "Entrer dans le lounge",
-    search: "Rechercher dans le menu",
+    enter: "Découvrir la carte",
+    search: "Rechercher dans la carte",
     favorites: "Favoris",
     all: "Tout",
-    admin: "Admin",
+    admin: "Administration",
     lounge: "Lounge",
-    menu: "Menu",
+    menu: "Carte",
     review: "Avis Google",
     instagram: "Instagram",
-    editMenu: "Modifier le menu",
+    editMenu: "Modifier la carte",
     product: "Produit",
     price: "Prix",
     save: "Enregistrer",
-    configured: "Supabase pret",
+    configured: "Supabase prêt",
     localMode: "Mode local",
     empty: "Aucun produit pour le moment"
   },
   de: {
     welcome: "Willkommen bei GOIA",
-    enter: "Die Lounge betreten",
-    search: "Menu durchsuchen",
+    enter: "Karte entdecken",
+    search: "Karte durchsuchen",
     favorites: "Favoriten",
     all: "Alle",
-    admin: "Admin",
+    admin: "Administration",
     lounge: "Lounge",
-    menu: "Menu",
+    menu: "Karte",
     review: "Google Bewertungen",
     instagram: "Instagram",
-    editMenu: "Menu bearbeiten",
+    editMenu: "Karte bearbeiten",
     product: "Produkt",
     price: "Preis",
     save: "Speichern",
@@ -126,7 +127,7 @@ export const initialProducts: Product[] = [
     description: {
       en: "Traditional hookah with all available flavors.",
       fr: "Chicha traditionnelle avec tous les parfums disponibles.",
-      de: "Traditionelle Shisha mit allen verfugbaren Sorten."
+      de: "Traditionelle Shisha mit allen verfügbaren Sorten."
     }
   },
   {
@@ -142,8 +143,26 @@ export const initialProducts: Product[] = [
     },
     description: {
       en: "Premium Quasar heating system with all available flavors.",
-      fr: "Systeme de chauffe premium Quasar avec tous les parfums disponibles.",
-      de: "Premium Quasar Heizsystem mit allen verfugbaren Sorten."
+      fr: "Système de chauffe premium Quasar avec tous les parfums disponibles.",
+      de: "Premium Quasar Heizsystem mit allen verfügbaren Sorten."
+    }
+  },
+  {
+    id: "quasar-tete-quasar",
+    category: "chichas",
+    price: 25,
+    image: "",
+    available: true,
+    badge: "⭐ Premium+",
+    name: {
+      en: "Quasar + Tête Quasar",
+      fr: "Quasar + Tête Quasar",
+      de: "Quasar + Tête Quasar"
+    },
+    description: {
+      en: "Official Quasar head with Quasar heating system. Premium experience, dense smoke and long-lasting session.",
+      fr: "Tête Quasar officielle avec système de chauffe Quasar. Expérience premium, fumée dense et longue durée.",
+      de: "Offizieller Quasar Kopf mit Quasar Heizsystem. Premium-Erlebnis, dichter Rauch und lange Dauer."
     }
   }
 ];

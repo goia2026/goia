@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+.env*.local
+.pnpm-cache
+.pnpm-store
+.vercel
+.vercel-home
+.DS_Store
+fresh-goia-preview-3001

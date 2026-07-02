@@ -14,7 +14,7 @@ import {
   X
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { GoiaLogo } from "@/components/GoiaLogo";
 import {
   Category,
@@ -87,8 +87,6 @@ type AppCopy = {
 const reviewUrl =
   "https://www.google.com/maps/place//data=!4m3!3m2!1s0x4796cf800b7cf257:0x871ef082619b267!12e1?source=g.page.m._&laa=merchant-review-solicitation";
 const instagramUrl = "https://www.instagram.com/goia.kehl/?hl=de";
-const findUsUrl =
-  "https://www.google.com/maps/search/?api=1&query=GOIA%20Huqqa%20Lounge%20Bahnhofstra%C3%9Fe%206%2077694%20Kehl";
 
 const currency = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -596,67 +594,13 @@ function Landing({
   setLocale: (locale: Locale) => void;
   onEnter: () => void;
 }) {
-  const c = appCopy[locale];
-  const t = uiCopy[locale];
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const videoResetTimeoutRef = useRef<number | null>(null);
+  const [isEntering, setIsEntering] = useState(false);
 
-  function restartWelcomeVideoAtFourteenSeconds(video: HTMLVideoElement | null) {
-    if (video && video.currentTime >= 14) {
-      if (videoResetTimeoutRef.current !== null) {
-        window.clearTimeout(videoResetTimeoutRef.current);
-        videoResetTimeoutRef.current = null;
-      }
-      video.currentTime = 0;
-      void video.play();
-    }
+  function enterMenu() {
+    if (isEntering) return;
+    setIsEntering(true);
+    window.setTimeout(onEnter, 420);
   }
-
-  function scheduleWelcomeVideoRestart(video: HTMLVideoElement) {
-    if (videoResetTimeoutRef.current !== null) {
-      window.clearTimeout(videoResetTimeoutRef.current);
-    }
-
-    const millisecondsUntilRestart = Math.max(0, (14 - video.currentTime) * 1000);
-    videoResetTimeoutRef.current = window.setTimeout(() => {
-      video.currentTime = 0;
-      void video.play();
-      scheduleWelcomeVideoRestart(video);
-    }, millisecondsUntilRestart);
-  }
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-
-    const welcomeVideo = video;
-
-    function handleWelcomeVideoTimeUpdate() {
-      restartWelcomeVideoAtFourteenSeconds(welcomeVideo);
-    }
-
-    function handleWelcomeVideoPlayback() {
-      scheduleWelcomeVideoRestart(welcomeVideo);
-    }
-
-    welcomeVideo.loop = false;
-    welcomeVideo.removeAttribute("loop");
-    welcomeVideo.addEventListener("timeupdate", handleWelcomeVideoTimeUpdate);
-    welcomeVideo.addEventListener("play", handleWelcomeVideoPlayback);
-    welcomeVideo.addEventListener("seeked", handleWelcomeVideoPlayback);
-    scheduleWelcomeVideoRestart(welcomeVideo);
-
-    return () => {
-      if (videoResetTimeoutRef.current !== null) {
-        window.clearTimeout(videoResetTimeoutRef.current);
-      }
-      welcomeVideo.removeEventListener("timeupdate", handleWelcomeVideoTimeUpdate);
-      welcomeVideo.removeEventListener("play", handleWelcomeVideoPlayback);
-      welcomeVideo.removeEventListener("seeked", handleWelcomeVideoPlayback);
-    };
-  }, []);
 
   return (
     <motion.section
@@ -667,14 +611,14 @@ function Landing({
       className="relative flex min-h-screen items-center justify-center overflow-hidden bg-black px-5"
     >
       <motion.video
-        ref={videoRef}
         className="absolute inset-0 h-full w-full object-cover opacity-90 will-change-transform"
         autoPlay
         muted
         playsInline
-        onTimeUpdate={(event) => restartWelcomeVideoAtFourteenSeconds(event.currentTarget)}
+        preload="auto"
+        onEnded={enterMenu}
         initial={{ scale: 1.02, y: 0, opacity: 0 }}
-        animate={{ scale: [1.02, 1.07, 1.02], y: [0, -6, 0], opacity: 0.9 }}
+        animate={{ scale: isEntering ? 1.08 : [1.02, 1.07, 1.02], y: [0, -6, 0], opacity: 0.9 }}
         transition={{
           scale: { duration: 24, repeat: Infinity, ease: "easeInOut" },
           y: { duration: 18, repeat: Infinity, ease: "easeInOut" },
@@ -682,13 +626,14 @@ function Landing({
         }}
       >
         <source src="/goia-welcome.mp4" type="video/mp4" />
-        <source src="/goia-welcome.webm" type="video/webm" />
-        <source
-          src="https://cdn.coverr.co/videos/coverr-pouring-a-drink-9747/1080p.mp4"
-          type="video/mp4"
-        />
       </motion.video>
       <div className="pointer-events-none absolute inset-0 bg-[rgba(0,0,0,0.45)]" />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: isEntering ? 1 : 0 }}
+        transition={{ duration: 0.42, ease: luxuryEase }}
+        className="pointer-events-none absolute inset-0 z-20 bg-black"
+      />
       <motion.div
         initial={{ opacity: 1 }}
         animate={{ opacity: 0 }}
@@ -727,70 +672,22 @@ function Landing({
           </span>
         </motion.div>
         <motion.div
-          initial={{ opacity: 0, y: 14, scale: 0.985 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ delay: 0.42, duration: 0.8, ease: luxuryEase }}
-          className="mt-12"
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7, duration: 0.8, ease: luxuryEase }}
+          className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2 pb-[env(safe-area-inset-bottom)]"
         >
           <motion.button
-            whileHover={{
-              y: -3,
-              boxShadow:
-                "0 0 56px rgba(200,164,91,0.48), 0 28px 88px rgba(0,0,0,0.55)"
-            }}
+            whileHover={{ y: -2 }}
             whileTap={{ scale: 0.985 }}
-            animate={{ y: [0, -2, 0] }}
-            transition={{ delay: 1.35, duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
-            onClick={onEnter}
-            className="inline-flex h-14 items-center gap-3 rounded-full border border-[#F3D891]/45 bg-[#C8A45B]/95 px-8 text-sm font-semibold uppercase tracking-[0.2em] text-black shadow-[0_0_34px_rgba(200,164,91,0.28),0_18px_64px_rgba(0,0,0,0.42)] backdrop-blur-xl transition duration-300 hover:bg-[#E5C779] sm:h-16 sm:px-10"
+            onClick={enterMenu}
+            className="inline-flex h-12 items-center gap-3 rounded-full border border-white/15 bg-black/32 px-6 text-xs font-semibold uppercase tracking-[0.22em] text-white/82 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl transition duration-300 hover:border-[#C8A45B]/50 hover:bg-[#C8A45B]/12 hover:text-white"
           >
-            <span aria-hidden="true">→</span>
-            {t.enter}
+            Passer
           </motion.button>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 18, filter: "blur(10px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ delay: 0.66, duration: 0.85, ease: luxuryEase }}
-          className="mt-7 grid w-full max-w-[36rem] gap-3 px-1 sm:grid-cols-3"
-        >
-          <LandingGlassButton href={instagramUrl} icon="📸" label={t.instagram} />
-          <LandingGlassButton href={reviewUrl} icon="⭐" label={t.review} />
-          <LandingGlassButton href={findUsUrl} icon="📍" label={c.findUs} />
         </motion.div>
       </motion.div>
     </motion.section>
-  );
-}
-
-function LandingGlassButton({
-  href,
-  icon,
-  label
-}: {
-  href: string;
-  icon: string;
-  label: string;
-}) {
-  return (
-    <motion.a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      whileHover={{ y: -4, scale: 1.018 }}
-      whileTap={{ scale: 0.985 }}
-      transition={{ duration: 0.28, ease: luxuryEase }}
-      className="group relative overflow-hidden rounded-2xl border border-[#C8A45B]/24 bg-white/[0.075] px-4 py-4 text-center shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl transition duration-300 hover:border-[#C8A45B]/60 hover:bg-[#C8A45B]/12"
-    >
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(200,164,91,0.16),rgba(255,255,255,0.07)_42%,rgba(0,0,0,0)_78%)] opacity-60 transition duration-300 group-hover:opacity-100" />
-      <div className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-[#C8A45B]/16 blur-2xl transition duration-500 group-hover:bg-[#C8A45B]/26" />
-      <span className="relative flex items-center justify-center gap-2 text-sm font-medium uppercase tracking-[0.14em] text-white/86 transition duration-300 group-hover:text-[#F4D989]">
-        <span className="text-base" aria-hidden="true">
-          {icon}
-        </span>
-        {label}
-      </span>
-    </motion.a>
   );
 }
 

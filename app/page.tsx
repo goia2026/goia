@@ -24,6 +24,7 @@ import {
   categoryLabels,
   categoryOrder,
   initialCategories,
+  initialProducts,
   uiCopy
 } from "@/lib/menu-data";
 import { supabase } from "@/lib/supabase";
@@ -344,7 +345,7 @@ export default function HomePage() {
   const [locale, setLocale] = useState<Locale>("fr");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category | "all">("chichas");
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(initialProducts.map(normalizeProduct));
   const [categories, setCategories] = useState<MenuCategory[]>(initialCategories);
   const [labels, setLabels] = useState<CategoryLabels>(categoryLabels);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -377,7 +378,7 @@ export default function HomePage() {
       supabaseClient.from("products").select("*"),
       supabaseClient.from("categories").select("*").order("position", { ascending: true })
     ]).then(([productsResult, categoriesResult]) => {
-      if (productsResult.data) {
+      if (productsResult.data?.length) {
         setProducts((productsResult.data as Product[]).map(normalizeProduct));
       }
 
@@ -400,7 +401,7 @@ export default function HomePage() {
           .from("products")
           .select("*")
           .then(({ data }) => {
-            if (data) setProducts((data as Product[]).map(normalizeProduct));
+            if (data?.length) setProducts((data as Product[]).map(normalizeProduct));
           });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, () => {

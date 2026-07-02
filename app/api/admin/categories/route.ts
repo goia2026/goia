@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
 import type { MenuCategory } from "@/lib/menu-data";
 import { verifyAdminRequest } from "@/lib/admin-auth";
-import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
+import {
+  isSupabaseAdminConfigured,
+  missingSupabaseAdminEnv,
+  supabaseAdmin,
+  supabaseAdminEnvStatus
+} from "@/lib/supabase-admin";
+
+function supabaseDiagnostic() {
+  return {
+    configured: isSupabaseAdminConfigured,
+    env: supabaseAdminEnvStatus,
+    missing: missingSupabaseAdminEnv
+  };
+}
 
 export async function GET(request: Request) {
   if (!(await verifyAdminRequest(request))) {
@@ -9,7 +22,8 @@ export async function GET(request: Request) {
   }
 
   if (!supabaseAdmin) {
-    return NextResponse.json({ configured: false, categories: [] });
+    console.info("[GOIA admin] Supabase env", supabaseDiagnostic());
+    return NextResponse.json({ ...supabaseDiagnostic(), categories: [] });
   }
 
   const { data, error } = await supabaseAdmin
@@ -22,7 +36,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    configured: isSupabaseAdminConfigured,
+    ...supabaseDiagnostic(),
     categories: data || []
   });
 }
@@ -33,7 +47,8 @@ export async function POST(request: Request) {
   }
 
   if (!supabaseAdmin) {
-    return NextResponse.json({ configured: false });
+    console.info("[GOIA admin] Supabase env", supabaseDiagnostic());
+    return NextResponse.json(supabaseDiagnostic());
   }
 
   const category = (await request.json()) as MenuCategory;

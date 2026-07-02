@@ -62,6 +62,10 @@ const adminCopy = {
     delete: "Supprimer",
     saved: "Enregistré",
     saving: "Enregistrement...",
+    syncSuccess: "Synchronisation Supabase terminée.",
+    syncError: "Synchronisation impossible.",
+    supabaseMissing: "Supabase n’est pas configuré sur ce déploiement.",
+    missingEnv: "Variables manquantes",
     ingredients: "Ingrédients",
     empty: "Aucun produit trouvé.",
     supabaseHint: "Connectez Supabase pour synchroniser les changements en ligne."
@@ -92,6 +96,10 @@ const adminCopy = {
     delete: "Löschen",
     saved: "Gespeichert",
     saving: "Speichert...",
+    syncSuccess: "Supabase-Synchronisierung abgeschlossen.",
+    syncError: "Synchronisierung nicht möglich.",
+    supabaseMissing: "Supabase ist für dieses Deployment nicht konfiguriert.",
+    missingEnv: "Fehlende Variablen",
     ingredients: "Zutaten",
     empty: "Kein Produkt gefunden.",
     supabaseHint: "Supabase verbinden, um Änderungen online zu synchronisieren."
@@ -122,10 +130,20 @@ const adminCopy = {
     delete: "Delete",
     saved: "Saved",
     saving: "Saving...",
+    syncSuccess: "Supabase sync complete.",
+    syncError: "Sync failed.",
+    supabaseMissing: "Supabase is not configured for this deployment.",
+    missingEnv: "Missing variables",
     ingredients: "Ingredients",
     empty: "No product found.",
     supabaseHint: "Connect Supabase to sync changes online."
   }
+};
+
+type SupabaseDiagnostic = {
+  configured?: boolean;
+  env?: Record<string, boolean>;
+  missing?: string[];
 };
 
 function blankProduct(): Product {
@@ -187,6 +205,12 @@ export default function AdminPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<MenuCategory[]>(initialCategories);
   const [status, setStatus] = useState<"saved" | "saving">("saved");
+  const [syncMessage, setSyncMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [supabaseDiagnostic, setSupabaseDiagnostic] =
+    useState<SupabaseDiagnostic | null>(null);
   const [onlineStorage, setOnlineStorage] = useState(false);
   const copy = adminCopy[locale];
 
@@ -202,13 +226,24 @@ export default function AdminPage() {
     const productsData = (await productsResponse.json()) as {
       configured?: boolean;
       products?: Product[];
+      env?: Record<string, boolean>;
+      missing?: string[];
     };
     const categoriesData = (await categoriesResponse.json()) as {
       configured?: boolean;
       categories?: MenuCategory[];
+      env?: Record<string, boolean>;
+      missing?: string[];
     };
 
     setOnlineStorage(Boolean(productsData.configured && categoriesData.configured));
+    setSupabaseDiagnostic({
+      configured: Boolean(productsData.configured && categoriesData.configured),
+      env: { ...productsData.env, ...categoriesData.env },
+      missing: [...(productsData.missing || []), ...(categoriesData.missing || [])].filter(
+        (name, index, list) => list.indexOf(name) === index
+      )
+    });
     setProducts((productsData.products || []).map(normalizeProduct));
     setCategories((categoriesData.categories?.length ? categoriesData.categories : initialCategories)
       .map(normalizeCategory)
@@ -303,11 +338,51 @@ export default function AdminPage() {
 
   async function seedSupabaseMenu() {
     setStatus("saving");
-    const response = await fetch("/api/admin/seed", { method: "POST" });
-    if (response.ok) {
+    setSyncMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/seed", { method: "POST" });
+      const data = (await response.json().catch(() => ({}))) as {
+        configured?: boolean;
+        categories?: number;
+        products?: number;
+        error?: string;
+        env?: Record<string, boolean>;
+        missing?: string[];
+      };
+      setSupabaseDiagnostic({
+        configured: Boolean(data.configured),
+        env: data.env,
+        missing: data.missing || []
+      });
+
+      if (!response.ok) {
+        throw new Error(data.error || copy.syncError);
+      }
+
+      if (!data.configured) {
+        const missing = data.missing?.length
+          ? ` ${copy.missingEnv}: ${data.missing.join(", ")}`
+          : "";
+        throw new Error(`${copy.supabaseMissing}${missing}`);
+      }
+
       await refreshAdminData();
+      setOnlineStorage(true);
+      setSyncMessage({
+        type: "success",
+        text: `${copy.syncSuccess} ${data.products || 0} produits, ${
+          data.categories || 0
+        } catégories.`
+      });
+    } catch (error) {
+      setSyncMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : copy.syncError
+      });
+    } finally {
+      setStatus("saved");
     }
-    setStatus("saved");
   }
 
   async function updateCategory(categoryId: Category, patch: Partial<MenuCategory>) {
@@ -432,6 +507,24 @@ export default function AdminPage() {
           {!onlineStorage && (
             <p className="rounded-2xl border border-[#8A7665]/20 bg-[#8A7665]/10 px-4 py-3 text-sm text-white/62">
               {copy.supabaseHint}
+              {supabaseDiagnostic?.missing?.length ? (
+                <span className="mt-2 block text-white/80">
+                  {copy.missingEnv}: {supabaseDiagnostic.missing.join(", ")}
+                </span>
+              ) : null}
+            </p>
+          )}
+
+          {syncMessage && (
+            <p
+              className={[
+                "rounded-2xl border px-4 py-3 text-sm",
+                syncMessage.type === "success"
+                  ? "border-emerald-300/25 bg-emerald-400/10 text-emerald-50"
+                  : "border-red-300/25 bg-red-500/10 text-red-50"
+              ].join(" ")}
+            >
+              {syncMessage.text}
             </p>
           )}
 

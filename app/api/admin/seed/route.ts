@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
 import { initialCategories, initialProducts } from "@/lib/menu-data";
 import { verifyAdminRequest } from "@/lib/admin-auth";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import {
+  isSupabaseAdminConfigured,
+  missingSupabaseAdminEnv,
+  supabaseAdmin,
+  supabaseAdminEnvStatus
+} from "@/lib/supabase-admin";
+
+function supabaseDiagnostic() {
+  return {
+    configured: isSupabaseAdminConfigured,
+    env: supabaseAdminEnvStatus,
+    missing: missingSupabaseAdminEnv
+  };
+}
 
 export async function POST(request: Request) {
   if (!(await verifyAdminRequest(request))) {
@@ -9,7 +22,8 @@ export async function POST(request: Request) {
   }
 
   if (!supabaseAdmin) {
-    return NextResponse.json({ configured: false });
+    console.info("[GOIA admin] Supabase env", supabaseDiagnostic());
+    return NextResponse.json(supabaseDiagnostic());
   }
 
   const { error: categoryError } = await supabaseAdmin
@@ -27,7 +41,7 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
-    configured: true,
+    ...supabaseDiagnostic(),
     categories: initialCategories.length,
     products: initialProducts.length
   });

@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
 import type { Product } from "@/lib/menu-data";
 import { verifyAdminRequest } from "@/lib/admin-auth";
-import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase-admin";
+import {
+  isSupabaseAdminConfigured,
+  missingSupabaseAdminEnv,
+  supabaseAdmin,
+  supabaseAdminEnvStatus
+} from "@/lib/supabase-admin";
+
+function supabaseDiagnostic() {
+  return {
+    configured: isSupabaseAdminConfigured,
+    env: supabaseAdminEnvStatus,
+    missing: missingSupabaseAdminEnv
+  };
+}
 
 export async function GET(request: Request) {
   if (!(await verifyAdminRequest(request))) {
@@ -9,7 +22,8 @@ export async function GET(request: Request) {
   }
 
   if (!supabaseAdmin) {
-    return NextResponse.json({ configured: false, products: [] });
+    console.info("[GOIA admin] Supabase env", supabaseDiagnostic());
+    return NextResponse.json({ ...supabaseDiagnostic(), products: [] });
   }
 
   const { data, error } = await supabaseAdmin.from("products").select("*");
@@ -19,7 +33,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    configured: isSupabaseAdminConfigured,
+    ...supabaseDiagnostic(),
     products: data || []
   });
 }
@@ -30,7 +44,8 @@ export async function POST(request: Request) {
   }
 
   if (!supabaseAdmin) {
-    return NextResponse.json({ configured: false });
+    console.info("[GOIA admin] Supabase env", supabaseDiagnostic());
+    return NextResponse.json(supabaseDiagnostic());
   }
 
   const product = (await request.json()) as Product;
@@ -49,7 +64,8 @@ export async function DELETE(request: Request) {
   }
 
   if (!supabaseAdmin) {
-    return NextResponse.json({ configured: false });
+    console.info("[GOIA admin] Supabase env", supabaseDiagnostic());
+    return NextResponse.json(supabaseDiagnostic());
   }
 
   const { id } = (await request.json()) as { id?: string };

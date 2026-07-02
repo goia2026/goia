@@ -1,9 +1,9 @@
 const cookieName = "goia_admin_session";
 const sessionHours = 8;
-const fallbackAdminPassword = "7sBkb6vaUXDWgszdAnCgRRt2";
+const adminPassword = "Goia2026!";
 
 export function getAdminPassword() {
-  return process.env.GOIA_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || fallbackAdminPassword;
+  return adminPassword;
 }
 
 export function getSessionSecret() {

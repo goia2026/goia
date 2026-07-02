@@ -1,7 +1,7 @@
 {
   "framework": "nextjs",
-  "buildCommand": "pnpm build",
-  "installCommand": "pnpm install",
-  "devCommand": "pnpm dev",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "devCommand": "npm run dev",
   "regions": ["fra1"]
 }

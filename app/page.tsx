@@ -621,12 +621,13 @@ function Landing({
       className="relative flex min-h-screen items-center justify-center overflow-hidden bg-black px-5"
     >
       <motion.video
+        src="/goia-welcome.mp4"
         className="absolute inset-0 h-full w-full object-cover opacity-90 will-change-transform"
         autoPlay
         muted
+        loop
         playsInline
         preload="auto"
-        onEnded={enterMenu}
         onTimeUpdate={(event) => handleWelcomeVideoTimeUpdate(event.currentTarget)}
         initial={{ scale: 1.02, y: 0, opacity: 0 }}
         animate={{ scale: isEntering ? 1.08 : [1.02, 1.07, 1.02], y: [0, -6, 0], opacity: 0.9 }}
@@ -635,9 +636,7 @@ function Landing({
           y: { duration: 18, repeat: Infinity, ease: "easeInOut" },
           opacity: { duration: 1.8, ease: luxuryEase }
         }}
-      >
-        <source src="/goia-welcome.mp4" type="video/mp4" />
-      </motion.video>
+      />
       <div className="pointer-events-none absolute inset-0 bg-[rgba(0,0,0,0.45)]" />
       <motion.div
         initial={{ opacity: 0 }}

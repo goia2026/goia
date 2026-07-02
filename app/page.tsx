@@ -604,14 +604,6 @@ function Landing({
     window.setTimeout(onEnter, 420);
   }
 
-  function handleWelcomeVideoTimeUpdate(video: HTMLVideoElement) {
-    if (video.currentTime >= 14) {
-      video.currentTime = 0;
-      void video.play();
-      enterMenu();
-    }
-  }
-
   return (
     <motion.section
       initial={{ opacity: 0, backgroundColor: "#000000" }}
@@ -628,7 +620,6 @@ function Landing({
         loop
         playsInline
         preload="auto"
-        onTimeUpdate={(event) => handleWelcomeVideoTimeUpdate(event.currentTarget)}
         initial={{ scale: 1.02, y: 0, opacity: 0 }}
         animate={{ scale: isEntering ? 1.08 : [1.02, 1.07, 1.02], y: [0, -6, 0], opacity: 0.9 }}
         transition={{

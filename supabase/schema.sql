@@ -1,4 +1,3 @@
--- Canonical Supabase setup also lives at supabase/schema.sql.
 create table if not exists public.products (
   id text primary key,
   category text not null,

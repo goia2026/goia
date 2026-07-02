@@ -9,9 +9,9 @@ export type Category =
   | "milkshakes"
   | "smoothies"
   | "spiritueux"
-  | "boissons"
   | "desserts"
-  | "goia-signatures";
+  | "crepes"
+  | "coupes-glacees";
 
 export type Product = {
   id: string;
@@ -27,30 +27,37 @@ export type Product = {
   ingredients?: Record<Locale, string>;
 };
 
+export type MenuCategory = {
+  id: Category;
+  position: number;
+  labels: Record<Locale, string>;
+  available?: boolean;
+};
+
 export const categoryOrder: Category[] = [
   "chichas",
-  "softs-juices",
-  "hot-drinks",
   "cocktails",
   "mocktails",
+  "softs-juices",
+  "hot-drinks",
   "milkshakes",
   "smoothies",
-  "spiritueux",
-  "boissons",
   "desserts",
-  "goia-signatures"
+  "crepes",
+  "coupes-glacees",
+  "spiritueux"
 ];
 
 export const categoryLabels: Record<Category, Record<Locale, string>> = {
   chichas: { en: "Hookahs", fr: "Chichas", de: "Shishas" },
   "softs-juices": {
-    en: "Softs & Juices",
-    fr: "Softs & Jus",
-    de: "Softdrinks & Säfte"
+    en: "Soft Drinks",
+    fr: "Boissons",
+    de: "Softdrinks"
   },
   "hot-drinks": {
     en: "Hot Drinks",
-    fr: "Boissons Chaudes",
+    fr: "Boissons chaudes",
     de: "Heißgetränke"
   },
   cocktails: { en: "Cocktails", fr: "Cocktails", de: "Cocktails" },
@@ -58,14 +65,21 @@ export const categoryLabels: Record<Category, Record<Locale, string>> = {
   milkshakes: { en: "Milkshakes", fr: "Milkshakes", de: "Milkshakes" },
   smoothies: { en: "Smoothies", fr: "Smoothies", de: "Smoothies" },
   spiritueux: { en: "Spirits", fr: "Spiritueux", de: "Spirituosen" },
-  boissons: { en: "Drinks", fr: "Boissons", de: "Getränke" },
   desserts: { en: "Desserts", fr: "Desserts", de: "Desserts" },
-  "goia-signatures": {
-    en: "GOIA Signatures",
-    fr: "GOIA Signatures",
-    de: "GOIA Signatures"
+  crepes: { en: "Crêpes", fr: "Crêpes", de: "Crêpes" },
+  "coupes-glacees": {
+    en: "Ice Cream Cups",
+    fr: "Coupes glacées",
+    de: "Eisbecher"
   }
 };
+
+export const initialCategories: MenuCategory[] = categoryOrder.map((id, position) => ({
+  id,
+  position,
+  labels: categoryLabels[id],
+  available: true
+}));
 
 export const uiCopy = {
   en: {
@@ -903,7 +917,7 @@ export const initialProducts: Product[] = [
   }),
   product({
     id: "sunset-crepe",
-    category: "desserts",
+    category: "crepes",
     price: 8,
     name: "Sunset",
     description: {
@@ -914,7 +928,7 @@ export const initialProducts: Product[] = [
   }),
   product({
     id: "lotus-crepe",
-    category: "desserts",
+    category: "crepes",
     price: 8,
     name: "Lotus",
     description: {
@@ -925,7 +939,7 @@ export const initialProducts: Product[] = [
   }),
   product({
     id: "royal-caramel-crepe",
-    category: "desserts",
+    category: "crepes",
     price: 8,
     name: "Royal Caramel",
     description: {
@@ -936,7 +950,7 @@ export const initialProducts: Product[] = [
   }),
   product({
     id: "pistachio-crepe",
-    category: "desserts",
+    category: "crepes",
     price: 9,
     name: "Pistachio",
     description: {
@@ -947,7 +961,7 @@ export const initialProducts: Product[] = [
   }),
   product({
     id: "coupe-sunset",
-    category: "desserts",
+    category: "coupes-glacees",
     price: 11,
     name: "Sunset",
     description: {
@@ -958,7 +972,7 @@ export const initialProducts: Product[] = [
   }),
   product({
     id: "coupe-tropical",
-    category: "desserts",
+    category: "coupes-glacees",
     price: 11,
     name: "Tropical",
     description: {
@@ -969,7 +983,7 @@ export const initialProducts: Product[] = [
   }),
   product({
     id: "coupe-caramel-crown",
-    category: "desserts",
+    category: "coupes-glacees",
     price: 11,
     name: "Caramel Crown",
     description: {
@@ -980,7 +994,7 @@ export const initialProducts: Product[] = [
   }),
   product({
     id: "coupe-goia-signature",
-    category: "desserts",
+    category: "coupes-glacees",
     price: 12,
     name: "Signature du G",
     signature: true,

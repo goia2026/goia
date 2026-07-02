@@ -2,47 +2,40 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  BadgeCheck,
   Cloud,
-  Edit3,
-  Eye,
-  EyeOff,
   Globe2,
   Heart,
   Home,
   ImageIcon,
   Instagram,
-  Plus,
-  RotateCcw,
-  Save,
   Search,
   Sparkles,
   Star,
-  Trash2,
-  Upload,
   X
 } from "lucide-react";
-import type { ChangeEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GoiaLogo } from "@/components/GoiaLogo";
 import {
   Category,
   Locale,
+  MenuCategory,
   Product,
   categoryLabels,
   categoryOrder,
-  initialProducts,
+  initialCategories,
   uiCopy
 } from "@/lib/menu-data";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 
-type View = "home" | "menu" | "favorites" | "admin";
+type View = "home" | "menu" | "favorites";
 type CategoryLabels = typeof categoryLabels;
 type AppCopy = {
   followTitle: string;
   followSubtitle: string;
   reviewTitle: string;
   reviewSubtitle: string;
+  findUs: string;
   heroSummary: (products: number, categories: number) => string;
   googleReview: string;
   categoryEyebrow: string;
@@ -111,24 +104,8 @@ const fractionalCurrency = new Intl.NumberFormat("fr-FR", {
 });
 
 const luxuryEase = [0.16, 1, 0.3, 1] as const;
-const storageVersion = "goia-luxury-v11";
+const storageVersion = "goia-luxury-v14";
 const localeStorageKey = "goia:locale";
-
-const blankProduct = (): Product => ({
-  id: `goia-${Date.now()}`,
-  category: "chichas",
-  price: 0,
-  image: "https://images.unsplash.com/photo-1543007630-9710e4a00a20?auto=format&fit=crop&w=1400&q=85",
-  signature: false,
-  featured: false,
-  available: true,
-  name: { en: "New Product", fr: "Nouveau Produit", de: "Neues Produkt" },
-  description: {
-    en: "Add a short, premium description.",
-    fr: "Ajoutez une description courte et premium.",
-    de: "Füge eine kurze, hochwertige Beschreibung hinzu."
-  }
-});
 
 const appCopy: Record<Locale, AppCopy> = {
   fr: {
@@ -136,6 +113,7 @@ const appCopy: Record<Locale, AppCopy> = {
     followSubtitle: "Découvrez nos derniers événements, cocktails et l’atmosphère du lounge.",
     reviewTitle: "Laisser un avis Google",
     reviewSubtitle: "Partagez votre expérience chez GOIA.",
+    findUs: "Nous trouver",
     heroSummary: (products: number, categories: number) =>
       `${products} sélections dans ${categories} catégories.`,
     googleReview: "Avis Google",
@@ -189,6 +167,7 @@ const appCopy: Record<Locale, AppCopy> = {
     followSubtitle: "Entdecke unsere neuesten Events, Cocktails und die Lounge-Atmosphäre.",
     reviewTitle: "Google Bewertung abgeben",
     reviewSubtitle: "Teile deine Erfahrung bei GOIA.",
+    findUs: "Anfahrt",
     heroSummary: (products: number, categories: number) =>
       `${products} Auswahlmöglichkeiten in ${categories} Kategorien.`,
     googleReview: "Google Bewertung",
@@ -242,6 +221,7 @@ const appCopy: Record<Locale, AppCopy> = {
     followSubtitle: "Discover our latest events, cocktails and lounge atmosphere.",
     reviewTitle: "Leave a Google Review",
     reviewSubtitle: "Share your experience with GOIA.",
+    findUs: "Find Us",
     heroSummary: (products: number, categories: number) =>
       `${products} selections across ${categories} categories.`,
     googleReview: "Google Review",
@@ -328,6 +308,20 @@ function normalizeProduct(product: Product, index = 0): Product {
   };
 }
 
+function labelsFromCategories(categories: MenuCategory[]) {
+  return categories.reduce<CategoryLabels>((nextLabels, category) => {
+    if (!isCategory(category.id)) return nextLabels;
+
+    return {
+      ...nextLabels,
+      [category.id]: {
+        ...nextLabels[category.id],
+        ...category.labels
+      }
+    };
+  }, categoryLabels);
+}
+
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -343,15 +337,6 @@ function writeJson<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [entered, setEntered] = useState(false);
@@ -359,7 +344,8 @@ export default function HomePage() {
   const [locale, setLocale] = useState<Locale>("fr");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category | "all">("chichas");
-  const [products, setProducts] = useState<Product[]>(initialProducts.map(normalizeProduct));
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<MenuCategory[]>(initialCategories);
   const [labels, setLabels] = useState<CategoryLabels>(categoryLabels);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -376,15 +362,7 @@ export default function HomePage() {
       setLocale(savedLocale);
     }
 
-    if (window.localStorage.getItem("goia:version") !== storageVersion) {
-      window.localStorage.removeItem("goia:products");
-      window.localStorage.removeItem("goia:categories");
-      window.localStorage.removeItem("goia:favorites");
-      window.localStorage.setItem("goia:version", storageVersion);
-    }
     setFavorites(readJson<string[]>("goia:favorites", []));
-    setLabels(readJson<CategoryLabels>("goia:categories", categoryLabels));
-    setProducts(readJson<Product[]>("goia:products", initialProducts).map(normalizeProduct));
   }, []);
 
   useEffect(() => {
@@ -393,12 +371,61 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase
-      .from("products")
-      .select("*")
-      .then(({ data }) => {
-        if (data?.length) setProducts((data as Product[]).map(normalizeProduct));
+    const supabaseClient = supabase;
+
+    Promise.all([
+      supabaseClient.from("products").select("*"),
+      supabaseClient.from("categories").select("*").order("position", { ascending: true })
+    ]).then(([productsResult, categoriesResult]) => {
+      if (productsResult.data) {
+        setProducts((productsResult.data as Product[]).map(normalizeProduct));
+      }
+
+      if (categoriesResult.data?.length) {
+        const liveCategories = (categoriesResult.data as MenuCategory[])
+          .filter((item) => isCategory(item.id))
+          .map((item) => ({
+            ...item,
+            labels: { ...categoryLabels[item.id], ...item.labels }
+          }));
+        setCategories(liveCategories);
+        setLabels(labelsFromCategories(liveCategories));
+      }
+    });
+
+    const channel = supabaseClient
+      .channel("goia-live-menu")
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => {
+        supabaseClient
+          .from("products")
+          .select("*")
+          .then(({ data }) => {
+            if (data) setProducts((data as Product[]).map(normalizeProduct));
+          });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, () => {
+        supabaseClient
+          .from("categories")
+          .select("*")
+          .order("position", { ascending: true })
+          .then(({ data }) => {
+            if (data?.length) {
+              const liveCategories = (data as MenuCategory[])
+                .filter((item) => isCategory(item.id))
+                .map((item) => ({
+                  ...item,
+                  labels: { ...categoryLabels[item.id], ...item.labels }
+                }));
+              setCategories(liveCategories);
+              setLabels(labelsFromCategories(liveCategories));
+            }
+          });
       });
+    channel.subscribe();
+
+    return () => {
+      supabaseClient.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
@@ -410,13 +437,8 @@ export default function HomePage() {
     [products]
   );
 
-  const featuredProducts = useMemo(
-    () => visibleProducts.filter((product) => product.featured || product.signature).slice(0, 8),
-    [visibleProducts]
-  );
-
   const filteredProducts = useMemo(() => {
-    const source = view === "admin" ? products : visibleProducts;
+    const source = visibleProducts;
     const normalizedQuery = query.trim().toLowerCase();
 
     return source.filter((product) => {
@@ -436,7 +458,7 @@ export default function HomePage() {
 
       return categoryMatch && favoriteMatch && searchText.includes(normalizedQuery);
     });
-  }, [category, favorites, labels, locale, products, query, view, visibleProducts]);
+  }, [category, favorites, labels, locale, query, view, visibleProducts]);
 
   function enterLounge() {
     setEntered(true);
@@ -448,84 +470,6 @@ export default function HomePage() {
     setFavorites((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
     );
-  }
-
-  async function persistProduct(product: Product) {
-    if (supabase) {
-      await supabase.from("products").upsert(product);
-    }
-  }
-
-  function persistProducts(nextProducts: Product[]) {
-    setProducts(nextProducts);
-    writeJson("goia:products", nextProducts);
-  }
-
-  async function updateProduct(id: string, patch: Partial<Product>) {
-    const nextProducts = products.map((product) =>
-      product.id === id ? normalizeProduct({ ...product, ...patch }) : product
-    );
-    persistProducts(nextProducts);
-
-    const updatedProduct = nextProducts.find((product) => product.id === id);
-    if (updatedProduct) {
-      await persistProduct(updatedProduct);
-    }
-  }
-
-  async function addProduct() {
-    const product = blankProduct();
-    const nextProducts = [product, ...products];
-    persistProducts(nextProducts);
-    await persistProduct(product);
-  }
-
-  async function deleteProduct(id: string) {
-    const nextProducts = products.filter((product) => product.id !== id);
-    persistProducts(nextProducts);
-    setFavorites((current) => current.filter((item) => item !== id));
-    if (supabase) {
-      await supabase.from("products").delete().eq("id", id);
-    }
-  }
-
-  async function resetProducts() {
-    const reset = initialProducts.map(normalizeProduct);
-    persistProducts(reset);
-    setLabels(categoryLabels);
-    window.localStorage.removeItem("goia:products");
-    window.localStorage.removeItem("goia:categories");
-    if (supabase) {
-      await supabase.from("products").upsert(reset);
-    }
-  }
-
-  function updateCategoryLabel(categoryId: Category, nextLabels: Partial<Record<Locale, string>>) {
-    const updatedLabels = {
-      ...labels,
-      [categoryId]: { ...labels[categoryId], ...nextLabels }
-    };
-    setLabels(updatedLabels);
-    writeJson("goia:categories", updatedLabels);
-  }
-
-  async function uploadProductImage(product: Product, file: File) {
-    let image = await fileToDataUrl(file);
-
-    if (supabase) {
-      const extension = file.name.split(".").pop() || "jpg";
-      const path = `${product.id}-${Date.now()}.${extension}`;
-      const { error } = await supabase.storage.from("product-images").upload(path, file, {
-        cacheControl: "31536000",
-        upsert: true
-      });
-      if (!error) {
-        const { data } = supabase.storage.from("product-images").getPublicUrl(path);
-        if (data.publicUrl) image = data.publicUrl;
-      }
-    }
-
-    await updateProduct(product.id, { image });
   }
 
   return (
@@ -551,65 +495,28 @@ export default function HomePage() {
           >
             <Header locale={locale} setLocale={setLocale} />
 
-            <section className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-4 pb-10 pt-28 sm:px-6 lg:gap-12 lg:px-8">
-              <AppHero
+            <section className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 pb-10 pt-28 sm:px-6 lg:gap-7 lg:px-8">
+              <SearchBar value={query} locale={locale} onChange={setQuery} />
+
+              <CategoryCards
+                category={category}
+                categories={categories}
                 locale={locale}
                 labels={labels}
                 products={visibleProducts}
-                title={view === "admin" ? t.editMenu : view === "favorites" ? t.favorites : t.menu}
-                subtitle={view === "admin" ? "Studio GOIA" : "GOIA Huqqa Lounge"}
+                setCategory={setCategory}
               />
-
-              {view !== "admin" && (
-                <SearchBar value={query} locale={locale} onChange={setQuery} />
-              )}
-
-              {view === "menu" && featuredProducts.length > 0 && (
-                <FeaturedProducts
-                  products={featuredProducts}
-                  locale={locale}
-                  labels={labels}
-                  favorites={favorites}
-                  onOpen={setSelectedProduct}
-                  onToggleFavorite={toggleFavorite}
-                />
-              )}
-
-              {view !== "admin" ? (
-                <>
-                  <CategoryCards
-                    category={category}
-                    locale={locale}
-                    labels={labels}
-                    products={visibleProducts}
-                    setCategory={setCategory}
-                  />
-                  <ProductGrid
-                    products={filteredProducts}
-                    activeCategory={category === "all" ? null : category}
-                    locale={locale}
-                    labels={labels}
-                    favorites={favorites}
-                    emptyText={t.empty}
-                    onOpen={setSelectedProduct}
-                    onToggleFavorite={toggleFavorite}
-                  />
-                  <InstagramPanel locale={locale} />
-                </>
-              ) : (
-                <AdminDashboard
-                  locale={locale}
-                  products={products}
-                  labels={labels}
-                  status={isSupabaseConfigured ? t.configured : t.localMode}
-                  onAddProduct={addProduct}
-                  onDeleteProduct={deleteProduct}
-                  onImageUpload={uploadProductImage}
-                  onResetProducts={resetProducts}
-                  onUpdateCategoryLabel={updateCategoryLabel}
-                  onUpdateProduct={updateProduct}
-                />
-              )}
+              <ProductGrid
+                products={filteredProducts}
+                activeCategory={category === "all" ? null : category}
+                locale={locale}
+                labels={labels}
+                favorites={favorites}
+                emptyText={t.empty}
+                onOpen={setSelectedProduct}
+                onToggleFavorite={toggleFavorite}
+              />
+              <InstagramPanel locale={locale} />
             </section>
 
             <BottomNav
@@ -688,6 +595,8 @@ function Landing({
   setLocale: (locale: Locale) => void;
   onEnter: () => void;
 }) {
+  const c = appCopy[locale];
+  const t = uiCopy[locale];
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoResetTimeoutRef = useRef<number | null>(null);
 
@@ -758,16 +667,16 @@ function Landing({
     >
       <motion.video
         ref={videoRef}
-        className="absolute inset-0 h-full w-full object-cover opacity-75 will-change-transform"
+        className="absolute inset-0 h-full w-full object-cover opacity-90 will-change-transform"
         autoPlay
         muted
         playsInline
         onTimeUpdate={(event) => restartWelcomeVideoAtFourteenSeconds(event.currentTarget)}
-        initial={{ scale: 1.06, y: 0, opacity: 0 }}
-        animate={{ scale: [1.06, 1.13, 1.06], y: [0, -10, 0], opacity: 0.74 }}
+        initial={{ scale: 1.02, y: 0, opacity: 0 }}
+        animate={{ scale: [1.02, 1.07, 1.02], y: [0, -6, 0], opacity: 0.9 }}
         transition={{
-          scale: { duration: 20, repeat: Infinity, ease: "easeInOut" },
-          y: { duration: 16, repeat: Infinity, ease: "easeInOut" },
+          scale: { duration: 24, repeat: Infinity, ease: "easeInOut" },
+          y: { duration: 18, repeat: Infinity, ease: "easeInOut" },
           opacity: { duration: 1.8, ease: luxuryEase }
         }}
       >
@@ -778,17 +687,16 @@ function Landing({
           type="video/mp4"
         />
       </motion.video>
-      <div className="pointer-events-none absolute inset-0 bg-[rgba(0,0,0,0.58)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[rgba(0,0,0,0.45)]" />
       <motion.div
         initial={{ opacity: 1 }}
         animate={{ opacity: 0 }}
         transition={{ duration: 1.7, ease: luxuryEase }}
         className="absolute inset-0 bg-black"
       />
-      <div className="pointer-events-none absolute -left-20 top-1/4 h-80 w-80 rounded-full bg-taupe/18 blur-3xl" />
-      <div className="pointer-events-none absolute -right-24 bottom-16 h-96 w-96 rounded-full bg-white/8 blur-3xl" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(138,118,101,0.10),rgba(0,0,0,0.34)_34%,rgba(0,0,0,0.92)_88%)]" />
-      <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-ink via-ink/70 to-transparent" />
+      <div className="pointer-events-none absolute -left-20 top-1/4 h-80 w-80 rounded-full bg-[#C8A45B]/10 blur-3xl" />
+      <div className="pointer-events-none absolute -right-24 bottom-16 h-96 w-96 rounded-full bg-black/24 blur-3xl" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(200,164,91,0.08),rgba(0,0,0,0.20)_38%,rgba(0,0,0,0.58)_92%)]" />
 
       <div className="absolute right-4 top-4 z-10">
         <LanguageSwitch locale={locale} setLocale={setLocale} />
@@ -798,13 +706,13 @@ function Landing({
         initial={{ opacity: 0, y: 18, filter: "blur(14px)" }}
         animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
         transition={{ duration: 1.05, ease: luxuryEase }}
-        className="relative z-10 flex min-h-screen w-full max-w-3xl flex-col items-center justify-center pb-24 pt-28 text-center will-change-transform"
+        className="relative z-10 flex min-h-screen w-full max-w-3xl flex-col items-center justify-center px-2 py-24 text-center will-change-transform"
       >
         <motion.div
           initial={{ opacity: 0, scale: 0.92, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 1.15, ease: luxuryEase }}
-          className="relative flex flex-col items-center"
+          className="relative flex flex-col items-center gap-5"
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.7 }}
@@ -812,40 +720,16 @@ function Landing({
             transition={{ duration: 1.2, ease: luxuryEase }}
             className="pointer-events-none absolute left-1/2 top-1/2 h-52 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#C8A45B]/18 blur-3xl sm:h-64 sm:w-[30rem]"
           />
-          <span className="relative text-[clamp(5.4rem,21.5vw,10.8rem)] font-semibold leading-none tracking-[0.08em] text-white drop-shadow-[0_18px_70px_rgba(0,0,0,0.85)]">
-            GOIA
-          </span>
-          <span className="relative mt-2 text-sm font-light uppercase tracking-[0.48em] text-[#C8A45B] sm:text-base">
+          <GoiaLogo mark />
+          <span className="relative text-sm font-light uppercase tracking-[0.48em] text-[#C8A45B] sm:text-base">
             HUQQA LOUNGE
-          </span>
-        </motion.div>
-        <motion.p
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25, duration: 0.8, ease: luxuryEase }}
-          className="mt-8 text-sm font-light leading-7 tracking-[0.18em] text-[#E6C675] sm:text-base sm:leading-8"
-        >
-          <span className="block">Luxury Huqqa Lounge</span>
-          <span className="block text-white/72">Cocktails • Desserts • Premium Experience</span>
-        </motion.p>
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.42, duration: 0.75, ease: luxuryEase }}
-          className="mt-6 flex flex-col items-center gap-2"
-        >
-          <span className="text-lg tracking-[0.2em] text-[#C8A45B] drop-shadow-[0_0_24px_rgba(200,164,91,0.35)]">
-            ★★★★★
-          </span>
-          <span className="text-xs uppercase tracking-[0.22em] text-white/58">
-            The Premium Lounge in Kehl
           </span>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 14, scale: 0.985 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ delay: 0.62, duration: 0.8, ease: luxuryEase }}
-          className="mt-10"
+          transition={{ delay: 0.42, duration: 0.8, ease: luxuryEase }}
+          className="mt-12"
         >
           <motion.button
             whileHover={{
@@ -857,32 +741,21 @@ function Landing({
             animate={{ y: [0, -2, 0] }}
             transition={{ delay: 1.35, duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
             onClick={onEnter}
-            className="inline-flex h-16 items-center gap-3 rounded-full border border-[#F3D891]/50 bg-[#C8A45B] px-9 text-sm font-semibold uppercase tracking-[0.2em] text-black shadow-[0_0_38px_rgba(200,164,91,0.28),0_20px_70px_rgba(0,0,0,0.42)] transition duration-300 hover:bg-[#E5C779] sm:h-[4.5rem] sm:px-12 sm:text-base"
+            className="inline-flex h-14 items-center gap-3 rounded-full border border-[#F3D891]/45 bg-[#C8A45B]/95 px-8 text-sm font-semibold uppercase tracking-[0.2em] text-black shadow-[0_0_34px_rgba(200,164,91,0.28),0_18px_64px_rgba(0,0,0,0.42)] backdrop-blur-xl transition duration-300 hover:bg-[#E5C779] sm:h-16 sm:px-10"
           >
             <span aria-hidden="true">→</span>
-            ENTER THE MENU
+            {t.enter}
           </motion.button>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 18, filter: "blur(10px)" }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ delay: 0.85, duration: 0.85, ease: luxuryEase }}
+          transition={{ delay: 0.66, duration: 0.85, ease: luxuryEase }}
           className="mt-7 grid w-full max-w-[36rem] gap-3 px-1 sm:grid-cols-3"
         >
-          <LandingGlassButton href={instagramUrl} icon="📸" label="Instagram" />
-          <LandingGlassButton href={reviewUrl} icon="⭐" label="Google Reviews" />
-          <LandingGlassButton href={findUsUrl} icon="📍" label="Find Us" />
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.05, duration: 0.8, ease: luxuryEase }}
-          className="absolute bottom-3 left-1/2 w-full max-w-xs -translate-x-1/2 px-4 text-center text-xs leading-6 tracking-[0.16em] text-white/58 sm:bottom-4 sm:max-w-md"
-        >
-          <div className="mx-auto mb-4 h-px w-24 bg-gradient-to-r from-transparent via-[#C8A45B]/70 to-transparent shadow-[0_0_18px_rgba(200,164,91,0.28)]" />
-          <p>Bahnhofstraße 6</p>
-          <p>77694 Kehl</p>
-          <p className="mt-2 text-white/44">Open every day until late.</p>
+          <LandingGlassButton href={instagramUrl} icon="📸" label={t.instagram} />
+          <LandingGlassButton href={reviewUrl} icon="⭐" label={t.review} />
+          <LandingGlassButton href={findUsUrl} icon="📍" label={c.findUs} />
         </motion.div>
       </motion.div>
     </motion.section>
@@ -929,8 +802,8 @@ function Header({
 }) {
   return (
     <header className="fixed left-0 right-0 top-0 z-30 px-4 pt-4 sm:px-6">
-      <div className="glass mx-auto flex max-w-7xl items-center justify-between rounded-[1.75rem] px-4 py-3 sm:rounded-full">
-        <GoiaLogo compact />
+      <div className="mx-auto flex max-w-7xl items-center justify-between rounded-[1.75rem] border border-[#C8A45B]/16 bg-white/[0.94] px-4 py-3 shadow-[0_18px_55px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:rounded-full">
+        <GoiaLogo compact mark />
         <div className="flex items-center gap-2">
           <SocialButton
             href={reviewUrl}
@@ -938,7 +811,7 @@ function Header({
             icon={<Star size={17} />}
           />
           <SocialButton href={instagramUrl} label="Instagram" icon={<Instagram size={17} />} />
-          <LanguageSwitch locale={locale} setLocale={setLocale} />
+          <LanguageSwitch locale={locale} setLocale={setLocale} variant="light" />
         </div>
       </div>
     </header>
@@ -1014,13 +887,13 @@ function SearchBar({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="glass flex items-center gap-3 rounded-full px-4 py-3">
-      <Search className="shrink-0 text-taupe" size={20} />
+    <div className="flex h-14 items-center gap-3 rounded-[1.45rem] border border-[#C8A45B]/14 bg-white/[0.92] px-4 shadow-[0_18px_55px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:h-16 sm:rounded-full">
+      <Search className="shrink-0 text-[#8A7665]" size={19} />
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={uiCopy[locale].search}
-        className="h-11 min-w-0 flex-1 bg-transparent text-base text-white outline-none placeholder:text-white/42"
+        className="h-11 min-w-0 flex-1 bg-transparent text-sm text-black outline-none placeholder:text-black/38 sm:text-base"
       />
     </div>
   );
@@ -1028,19 +901,29 @@ function SearchBar({
 
 function LanguageSwitch({
   locale,
-  setLocale
+  setLocale,
+  variant = "dark"
 }: {
   locale: Locale;
   setLocale: (locale: Locale) => void;
+  variant?: "dark" | "light";
 }) {
   const languages: Array<{ id: Locale; label: string; short: string }> = [
     { id: "fr", label: "Français", short: "🇫🇷" },
     { id: "de", label: "Deutsch", short: "🇩🇪" },
     { id: "en", label: "English", short: "🇬🇧" }
   ];
+  const light = variant === "light";
 
   return (
-    <div className="glass flex min-h-11 items-center rounded-full border border-[#C8A45B]/18 px-1.5 py-1 shadow-[0_16px_55px_rgba(0,0,0,0.28)]">
+    <div
+      className={[
+        "flex min-h-11 items-center rounded-full px-1.5 py-1",
+        light
+          ? "border border-[#8A7665]/16 bg-black/[0.045] shadow-[0_16px_45px_rgba(0,0,0,0.12)]"
+          : "glass border border-[#C8A45B]/18 shadow-[0_16px_55px_rgba(0,0,0,0.28)]"
+      ].join(" ")}
+    >
       <Globe2 className="ml-2 mr-1 hidden text-[#C8A45B] sm:block" size={16} />
       {languages.map((item) => (
         <button
@@ -1050,7 +933,9 @@ function LanguageSwitch({
             "flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition sm:px-3",
             locale === item.id
               ? "bg-[#C8A45B] text-black shadow-[0_0_24px_rgba(200,164,91,0.24)]"
-              : "text-white/62 hover:bg-white/8 hover:text-white"
+              : light
+                ? "text-black/55 hover:bg-black/5 hover:text-black"
+                : "text-white/62 hover:bg-white/8 hover:text-white"
           ].join(" ")}
         >
           <span>{item.short}</span>
@@ -1077,7 +962,7 @@ function SocialButton({
       rel="noreferrer"
       aria-label={label}
       title={label}
-      className="hidden h-11 w-11 items-center justify-center rounded-full border border-white/10 text-white/72 transition hover:border-taupe/50 hover:bg-white/10 hover:text-white sm:flex"
+      className="hidden h-11 w-11 items-center justify-center rounded-full border border-[#8A7665]/18 text-black/62 transition hover:border-[#C8A45B]/45 hover:bg-[#C8A45B]/12 hover:text-black sm:flex"
     >
       {icon}
     </a>
@@ -1125,20 +1010,20 @@ const categoryDescriptions: Record<Category, Record<Locale, string>> = {
     de: "Premium-Flaschen, raffinierte Serves und Abendselektionen.",
     en: "Premium bottles, refined serves and after-dark selections."
   },
-  boissons: {
-    fr: "Boissons fraîches, eaux et essentiels de table.",
-    de: "Erfrischungen, Wasser und Tischklassiker.",
-    en: "Fresh drinks, waters and table essentials."
-  },
   desserts: {
     fr: "Douceurs finales pensées pour le partage.",
     de: "Süße Abschlüsse, gemacht zum Teilen.",
     en: "Sweet finales designed for sharing."
   },
-  "goia-signatures": {
-    fr: "Les créations les plus distinctives de la maison GOIA.",
-    de: "Die markantesten Kreationen des Hauses GOIA.",
-    en: "The most distinctive creations from GOIA."
+  crepes: {
+    fr: "Crêpes gourmandes, garnitures généreuses et finitions premium.",
+    de: "Genussvolle Crêpes mit großzügigen Toppings und Premium-Finish.",
+    en: "Indulgent crêpes with generous toppings and a premium finish."
+  },
+  "coupes-glacees": {
+    fr: "Coupes glacées signatures, fruits, sauces et chantilly.",
+    de: "Signature-Eisbecher mit Früchten, Saucen und Sahne.",
+    en: "Signature ice cream sundaes with fruit, sauces and whipped cream."
   }
 };
 
@@ -1267,55 +1152,48 @@ function getCategoryIcon(category: Category) {
       return <span className="text-[1.2rem] leading-none">🥭</span>;
     case "spiritueux":
       return <span className="text-[1.2rem] leading-none">🥃</span>;
-    case "boissons":
-      return <span className="text-[1.2rem] leading-none">🥤</span>;
     case "desserts":
       return <span className="text-[1.2rem] leading-none">🍰</span>;
-    case "goia-signatures":
-      return <span className="text-[1.2rem] leading-none">✨</span>;
+    case "crepes":
+      return <span className="text-[1.2rem] leading-none">🥞</span>;
+    case "coupes-glacees":
+      return <span className="text-[1.2rem] leading-none">🍨</span>;
   }
 }
 
 function CategoryCards({
   category,
+  categories,
   locale,
   labels,
   products,
   setCategory
 }: {
   category: Category | "all";
+  categories: MenuCategory[];
   locale: Locale;
   labels: CategoryLabels;
   products: Product[];
   setCategory: (category: Category | "all") => void;
 }) {
   const c = appCopy[locale];
-  const categoryCards = categoryOrder.map((item) => {
+  const categoryCards = categories
+    .filter((item) => item.available !== false)
+    .sort((a, b) => a.position - b.position)
+    .map((item) => item.id)
+    .filter(isCategory)
+    .map((item) => {
     const categoryProducts = products.filter((product) => product.category === item);
     return {
       id: item,
-      image: categoryProducts[0]?.image || products[0]?.image || "",
       count: categoryProducts.length,
-      label: labels[item][locale],
-      description: categoryDescriptions[item][locale]
+      label: labels[item][locale]
     };
   });
 
   return (
-    <section className="grid gap-4">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">{c.categoryEyebrow}</p>
-          <h2 className="mt-2 text-3xl font-semibold leading-tight text-white sm:text-4xl">
-            {c.categoryTitle}
-          </h2>
-        </div>
-        <p className="hidden max-w-xs text-right text-sm leading-6 text-white/46 sm:block">
-          {c.categoryText}
-        </p>
-      </div>
-
-      <div className="no-scrollbar -mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:px-0 lg:grid-cols-3 xl:grid-cols-5">
+    <section className="grid gap-3">
+      <div className="no-scrollbar -mx-4 flex snap-x gap-2.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
         {categoryCards.map((item) => (
           <CategoryCard
             key={item.id}
@@ -1323,8 +1201,6 @@ function CategoryCards({
             count={item.count}
             countLabel={c.selections}
             readyLabel={c.readyProducts}
-            description={item.description}
-            image={item.image}
             icon={getCategoryIcon(item.id)}
             label={item.label}
             eyebrow="GOIA"
@@ -1341,9 +1217,7 @@ function CategoryCard({
   count,
   countLabel,
   readyLabel,
-  description,
   eyebrow,
-  image,
   icon,
   label,
   onClick
@@ -1352,9 +1226,7 @@ function CategoryCard({
   count: number;
   countLabel: string;
   readyLabel: string;
-  description: string;
   eyebrow: string;
-  image: string;
   icon: ReactNode;
   label: string;
   onClick: () => void;
@@ -1363,140 +1235,27 @@ function CategoryCard({
     <motion.button
       layout
       whileTap={{ scale: 0.985 }}
-      whileHover={{ y: -3 }}
+      whileHover={{ y: -2 }}
       onClick={onClick}
       className={[
-        "group relative h-52 w-[78vw] shrink-0 snap-center overflow-hidden rounded-[1.75rem] border text-left shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-2xl transition sm:h-56 sm:w-auto",
+        "group relative flex min-h-[5.5rem] w-[11.5rem] shrink-0 snap-center items-center gap-3 overflow-hidden rounded-[1.4rem] border px-4 text-left shadow-[0_16px_55px_rgba(0,0,0,0.32)] backdrop-blur-2xl transition sm:w-auto sm:min-w-[12rem]",
         active
-          ? "border-[#C8A45B]/70 bg-black/62"
-          : "border-[#C8A45B]/18 bg-black/42 hover:border-[#C8A45B]/48"
+          ? "border-[#C8A45B]/70 bg-[#C8A45B]/14"
+          : "border-[#C8A45B]/18 bg-black/46 hover:border-[#C8A45B]/48"
       ].join(" ")}
     >
-      {image && (
-        <ProductImage
-          src={image}
-          alt=""
-          className="absolute inset-0 h-full w-full opacity-62 transition duration-700 group-hover:scale-105 group-hover:opacity-78"
-        />
-      )}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#C8A45B]/16 via-black/58 to-black" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_24%_18%,rgba(200,164,91,0.22),transparent_42%)]" />
-      <div className="absolute -right-10 -top-12 h-32 w-32 rounded-full bg-[#C8A45B]/12 blur-2xl transition duration-500 group-hover:bg-[#C8A45B]/20" />
-      <div className="relative flex h-full flex-col justify-between p-5">
-        <div className="flex items-center justify-between">
-          <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#C8A45B]/35 bg-[#C8A45B]/12 text-[#C8A45B] shadow-[0_0_34px_rgba(200,164,91,0.16)] transition duration-300 group-hover:text-[#F2D991]">
-            {icon}
-          </span>
-          <span
-            className={[
-              "rounded-full border px-3 py-1 text-[0.62rem] uppercase tracking-[0.2em] transition",
-              active
-                ? "border-[#C8A45B]/60 bg-[#C8A45B]/16 text-[#F2D991]"
-                : "border-white/10 bg-black/24 text-white/48"
-            ].join(" ")}
-          >
-            {eyebrow}
-          </span>
-        </div>
-        <div>
-          <p className="text-[0.68rem] uppercase tracking-[0.28em] text-[#C8A45B]">
-            {count > 0 ? `${count} ${countLabel}` : readyLabel}
-          </p>
-          <h3 className="mt-2 text-2xl font-semibold leading-none text-white">{label}</h3>
-          <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/54">{description}</p>
-        </div>
+      <div className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-[#C8A45B]/12 blur-2xl transition duration-500 group-hover:bg-[#C8A45B]/20" />
+      <span className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#C8A45B]/35 bg-[#C8A45B]/16 text-[#C8A45B] shadow-[0_0_34px_rgba(200,164,91,0.18)]">
+        {icon}
+      </span>
+      <div className="relative min-w-0">
+        <p className="text-[0.6rem] uppercase tracking-[0.22em] text-[#C8A45B]">{eyebrow}</p>
+        <h3 className="mt-1 truncate text-lg font-semibold leading-tight text-white">{label}</h3>
+        <p className="mt-1 text-[0.68rem] text-white/48">
+          {count > 0 ? `${count} ${countLabel}` : readyLabel}
+        </p>
       </div>
     </motion.button>
-  );
-}
-
-function FeaturedProducts({
-  products,
-  locale,
-  labels,
-  favorites,
-  onOpen,
-  onToggleFavorite
-}: {
-  products: Product[];
-  locale: Locale;
-  labels: CategoryLabels;
-  favorites: string[];
-  onOpen: (product: Product) => void;
-  onToggleFavorite: (id: string) => void;
-}) {
-  const c = appCopy[locale];
-
-  return (
-    <section className="grid gap-4">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-taupe">{c.featuredEyebrow}</p>
-          <h2 className="mt-1 text-2xl font-semibold text-white">{c.featuredTitle}</h2>
-        </div>
-        <BadgeCheck className="text-taupe" size={24} />
-      </div>
-      <div className="no-scrollbar -mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-        {products.map((product) => {
-          const badge = getProductBadge(product, locale);
-
-          return (
-          <motion.article
-            key={product.id}
-            layoutId={`featured-${product.id}`}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => onOpen(product)}
-            className="relative h-[24rem] w-[82vw] max-w-[28rem] shrink-0 snap-center overflow-hidden rounded-[2rem] border border-[#C8A45B]/18 bg-white/[0.045] shadow-[0_24px_80px_rgba(0,0,0,0.42)] sm:w-[26rem]"
-          >
-            {product.image ? (
-              <ProductImage src={product.image} alt={product.name[locale]} className="h-full w-full" />
-            ) : (
-              <ProductPhotoPlaceholder
-                icon={getCategoryIcon(product.category)}
-                label={product.name[locale]}
-              />
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/18 to-transparent" />
-            <span className="absolute right-4 top-4 rounded-full border border-[#C8A45B]/45 bg-[#C8A45B]/95 px-4 py-2 text-sm font-semibold text-black shadow-[0_0_34px_rgba(200,164,91,0.28)] backdrop-blur-xl">
-              {formatProductPrice(product, locale)}
-            </span>
-            <span className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-[#C8A45B]/30 bg-black/42 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-[#F2D991] backdrop-blur-xl">
-              {getCategoryIcon(product.category)}
-              {labels[product.category][locale]}
-            </span>
-            <button
-              onClick={(event) => {
-                event.stopPropagation();
-                onToggleFavorite(product.id);
-              }}
-              aria-label="Favorite"
-              className="absolute right-4 top-16 flex h-12 w-12 items-center justify-center rounded-full bg-black/38 text-white backdrop-blur-xl transition hover:bg-white hover:text-ink"
-            >
-              <Heart size={20} fill={favorites.includes(product.id) ? "currentColor" : "none"} />
-            </button>
-            {badge && (
-              <span className="absolute bottom-32 left-5 rounded-full border border-[#C8A45B]/45 bg-black/38 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F2D991] shadow-[0_0_30px_rgba(200,164,91,0.18)] backdrop-blur-xl">
-                {badge}
-              </span>
-            )}
-            <div className="absolute bottom-0 left-0 right-0 p-5">
-              <p className="text-xs uppercase tracking-[0.22em] text-taupe">
-                {labels[product.category][locale]}
-              </p>
-              <div className="mt-2 rounded-[1.25rem] bg-gradient-to-r from-black/58 via-black/26 to-transparent p-3">
-                <h3 className="text-3xl font-semibold leading-tight text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.55)]">
-                  {product.name[locale]}
-                </h3>
-              </div>
-              <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/66">
-                {product.description[locale]}
-              </p>
-            </div>
-          </motion.article>
-          );
-        })}
-      </div>
-    </section>
   );
 }
 
@@ -1577,6 +1336,7 @@ function ProductGrid({
 
   const sectionTitle = activeCategory ? labels[activeCategory][locale] : c.menuFallback;
   const isChichasPage = activeCategory === "chichas";
+  const sectionDescription = activeCategory ? categoryDescriptions[activeCategory][locale] : "";
 
   return (
     <motion.section
@@ -1586,26 +1346,30 @@ function ProductGrid({
       transition={{ duration: 0.48, ease: luxuryEase }}
       className="grid gap-5"
     >
-      <div className="flex items-end justify-between gap-4 border-t border-[#C8A45B]/18 pt-6">
-        <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">
-            {isChichasPage ? c.premiumSmoke : c.goiaSelection}
+      <div className="relative overflow-hidden rounded-[1.9rem] border border-[#C8A45B]/22 bg-black/72 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.44)] backdrop-blur-2xl sm:p-7">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-[#C8A45B]/14 blur-3xl" />
+        <div className="relative flex items-end justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-[#C8A45B]/38 bg-[#C8A45B]/16 text-[#C8A45B] shadow-[0_0_34px_rgba(200,164,91,0.18)]">
+              {activeCategory ? getCategoryIcon(activeCategory) : <Sparkles size={22} />}
+            </span>
+            <div className="min-w-0">
+              <p className="text-[0.66rem] uppercase tracking-[0.26em] text-[#C8A45B]">GOIA</p>
+              <h2 className="mt-1 truncate text-3xl font-semibold leading-none text-white sm:text-5xl">
+                {sectionTitle}
+              </h2>
+              <p className="mt-2 line-clamp-2 text-sm leading-6 text-white/55">
+                {isChichasPage ? c.chichaIntro : sectionDescription}
+              </p>
+            </div>
+          </div>
+          <p className="hidden rounded-full border border-[#C8A45B]/25 bg-[#C8A45B]/10 px-4 py-2 text-sm text-[#F2D991] backdrop-blur-xl sm:inline-flex">
+            {products.length} {c.items}
           </p>
-          <h2 className="mt-2 text-3xl font-semibold leading-tight text-white sm:text-4xl">
-            {sectionTitle}
-          </h2>
-          {isChichasPage && (
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/54">
-              {c.chichaIntro}
-            </p>
-          )}
         </div>
-        <p className="rounded-full border border-[#C8A45B]/25 bg-[#C8A45B]/10 px-4 py-2 text-sm text-[#F2D991] backdrop-blur-xl">
-          {products.length} {c.items}
-        </p>
       </div>
 
-      <motion.div layout className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+      <motion.div layout className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         <AnimatePresence mode="popLayout">
           {products.map((product) => {
             const badge = getProductBadge(product, locale);
@@ -1620,10 +1384,10 @@ function ProductGrid({
               whileHover={{ y: -8, scale: 1.012 }}
               transition={{ duration: 0.48, ease: luxuryEase }}
               onClick={() => onOpen(product)}
-              className="group relative flex h-full flex-col overflow-hidden rounded-[2rem] border border-[#C8A45B]/18 bg-black/54 shadow-[0_24px_90px_rgba(0,0,0,0.46)] backdrop-blur-2xl transition hover:border-[#C8A45B]/50 hover:shadow-[0_34px_120px_rgba(0,0,0,0.58)]"
+              className="group relative flex h-full min-h-[29rem] flex-col overflow-hidden rounded-[1.9rem] border border-[#C8A45B]/18 bg-black/64 shadow-[0_24px_90px_rgba(0,0,0,0.46)] backdrop-blur-2xl transition hover:border-[#C8A45B]/50 hover:shadow-[0_34px_120px_rgba(0,0,0,0.58)]"
             >
               <div className="pointer-events-none absolute -inset-12 bg-[radial-gradient(circle_at_50%_20%,rgba(200,164,91,0.24),transparent_42%)] opacity-60 blur-2xl transition duration-500 group-hover:opacity-95" />
-              <div className="relative h-[22rem] overflow-hidden bg-black sm:h-[24rem]">
+              <div className="relative h-[17.5rem] overflow-hidden bg-black sm:h-[20rem]">
                 {product.image ? (
                   <ProductImage
                     src={product.image}
@@ -1636,7 +1400,7 @@ function ProductGrid({
                     label={product.name[locale]}
                   />
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/10 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/12 to-transparent" />
                 <span className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-[#C8A45B]/30 bg-black/42 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-[#F2D991] backdrop-blur-xl">
                   {getCategoryIcon(product.category)}
                   {labels[product.category][locale]}
@@ -1665,11 +1429,11 @@ function ProductGrid({
               </div>
               <div className="relative flex flex-1 flex-col p-5 sm:p-6">
                 <div className="flex items-start gap-4">
-                  <div className="min-w-0 flex-1 rounded-[1.25rem] bg-gradient-to-r from-black/50 via-black/22 to-transparent p-3 -m-3">
+                  <div className="min-w-0 flex-1 rounded-[1.25rem] bg-gradient-to-r from-black/58 via-black/24 to-transparent p-3 -m-3">
                     <p className="text-xs uppercase tracking-[0.22em] text-[#C8A45B]">
                       {labels[product.category][locale]}
                     </p>
-                    <h2 className="mt-2 text-2xl font-semibold leading-tight text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.45)]">
+                    <h2 className="mt-2 text-[1.65rem] font-semibold leading-tight text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.45)]">
                       {product.name[locale]}
                     </h2>
                     {product.category === "chichas" && (
@@ -1952,308 +1716,6 @@ function InstagramPanel({ locale }: { locale: Locale }) {
   );
 }
 
-function AdminDashboard({
-  locale,
-  products,
-  labels,
-  status,
-  onAddProduct,
-  onDeleteProduct,
-  onImageUpload,
-  onResetProducts,
-  onUpdateCategoryLabel,
-  onUpdateProduct
-}: {
-  locale: Locale;
-  products: Product[];
-  labels: CategoryLabels;
-  status: string;
-  onAddProduct: () => void;
-  onDeleteProduct: (id: string) => void;
-  onImageUpload: (product: Product, file: File) => void;
-  onResetProducts: () => void;
-  onUpdateCategoryLabel: (categoryId: Category, labels: Partial<Record<Locale, string>>) => void;
-  onUpdateProduct: (id: string, patch: Partial<Product>) => void;
-}) {
-  const t = uiCopy[locale];
-  const c = appCopy[locale];
-
-  return (
-    <div className="grid gap-5">
-      <div className="glass flex flex-wrap items-center justify-between gap-3 rounded-[1.75rem] px-5 py-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-taupe">Studio GOIA</p>
-          <h2 className="mt-1 text-2xl font-semibold text-white">{t.editMenu}</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/52">
-            {c.adminDescription}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-taupe/40 px-4 py-2 text-sm text-white/72">
-            {status}
-          </span>
-          <button
-            onClick={onResetProducts}
-            className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 px-4 text-sm text-white/72 transition hover:border-taupe/50 hover:bg-white/10 hover:text-white"
-          >
-            <RotateCcw size={16} />
-            {c.reset}
-          </button>
-          <button
-            onClick={onAddProduct}
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-ink transition hover:bg-porcelain"
-          >
-            <Plus size={16} />
-            {c.add}
-          </button>
-        </div>
-      </div>
-
-      <CategoryEditor locale={locale} labels={labels} onUpdate={onUpdateCategoryLabel} />
-
-      <div className="grid gap-4">
-        {products.map((product) => (
-          <AdminProductEditor
-            key={product.id}
-            locale={locale}
-            labels={labels}
-            product={product}
-            onDeleteProduct={onDeleteProduct}
-            onImageUpload={onImageUpload}
-            onUpdateProduct={onUpdateProduct}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CategoryEditor({
-  locale,
-  labels,
-  onUpdate
-}: {
-  locale: Locale;
-  labels: CategoryLabels;
-  onUpdate: (categoryId: Category, labels: Partial<Record<Locale, string>>) => void;
-}) {
-  const c = appCopy[locale];
-
-  return (
-    <section className="glass rounded-[1.75rem] p-5">
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-taupe">{c.categories}</p>
-          <h3 className="mt-1 text-xl font-semibold text-white">{c.categoryArchitecture}</h3>
-        </div>
-        <Edit3 className="text-taupe" size={20} />
-      </div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {categoryOrder.map((categoryId) => (
-          <label
-            key={categoryId}
-            className="grid gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs uppercase tracking-[0.18em] text-white/42"
-          >
-            {categoryId}
-            <input
-              value={labels[categoryId][locale]}
-              onChange={(event) => onUpdate(categoryId, { [locale]: event.target.value })}
-              className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm normal-case tracking-normal text-white outline-none focus:border-taupe/70"
-            />
-          </label>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function AdminProductEditor({
-  locale,
-  labels,
-  product,
-  onDeleteProduct,
-  onImageUpload,
-  onUpdateProduct
-}: {
-  locale: Locale;
-  labels: CategoryLabels;
-  product: Product;
-  onDeleteProduct: (id: string) => void;
-  onImageUpload: (product: Product, file: File) => void;
-  onUpdateProduct: (id: string, patch: Partial<Product>) => void;
-}) {
-  function handleUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (file) onImageUpload(product, file);
-    event.target.value = "";
-  }
-  const t = uiCopy[locale];
-  const c = appCopy[locale];
-
-  return (
-    <article className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.045]">
-      <div className="grid gap-4 p-4 lg:grid-cols-[14rem_1fr]">
-        <div className="space-y-3">
-          <div className="relative aspect-square overflow-hidden rounded-[1.35rem] bg-taupe/20">
-            {product.image ? (
-              <ProductImage src={product.image} alt={product.name[locale]} className="h-full w-full" />
-            ) : (
-              <ProductPhotoPlaceholder compact label={c.photoReserved} />
-            )}
-            <div className="absolute left-3 top-3 rounded-full bg-black/45 px-3 py-1 text-xs uppercase tracking-[0.18em] text-white backdrop-blur-xl">
-              {labels[product.category][locale]}
-            </div>
-          </div>
-          <label className="inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-white text-sm font-semibold text-ink">
-            <Upload size={16} />
-            {c.uploadImage}
-            <input type="file" accept="image/*" onChange={handleUpload} className="sr-only" />
-          </label>
-          <label className="grid gap-2 text-xs uppercase tracking-[0.18em] text-white/42">
-            {c.imageUrl}
-            <span className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3">
-              <ImageIcon size={16} className="text-taupe" />
-              <input
-                value={product.image}
-                onChange={(event) => onUpdateProduct(product.id, { image: event.target.value })}
-                className="h-11 min-w-0 flex-1 bg-transparent text-sm normal-case tracking-normal text-white outline-none"
-              />
-            </span>
-          </label>
-        </div>
-
-        <div className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-[1fr_10rem_10rem]">
-            <label className="grid gap-2 text-xs uppercase tracking-[0.18em] text-white/42">
-              {t.product}
-              <input
-                value={product.name[locale]}
-                onChange={(event) =>
-                  onUpdateProduct(product.id, {
-                    name: { ...product.name, [locale]: event.target.value }
-                  })
-                }
-                className="h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-base normal-case tracking-normal text-white outline-none focus:border-taupe/70"
-              />
-            </label>
-            <label className="grid gap-2 text-xs uppercase tracking-[0.18em] text-white/42">
-              {t.price}
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={product.price}
-                onChange={(event) =>
-                  onUpdateProduct(product.id, { price: Number(event.target.value) })
-                }
-                className="h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-right text-base normal-case tracking-normal text-white outline-none focus:border-taupe/70"
-              />
-            </label>
-            <label className="grid gap-2 text-xs uppercase tracking-[0.18em] text-white/42">
-              {c.category}
-              <select
-                value={product.category}
-                onChange={(event) =>
-                  onUpdateProduct(product.id, { category: event.target.value as Category })
-                }
-                className="h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm normal-case tracking-normal text-white outline-none focus:border-taupe/70"
-              >
-                {categoryOrder.map((item) => (
-                  <option key={item} value={item} className="bg-ink text-white">
-                    {labels[item][locale]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <label className="grid gap-2 text-xs uppercase tracking-[0.18em] text-white/42">
-            {c.description}
-            <textarea
-              value={product.description[locale]}
-              onChange={(event) =>
-                onUpdateProduct(product.id, {
-                  description: { ...product.description, [locale]: event.target.value }
-                })
-              }
-              className="min-h-24 resize-y rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm leading-6 normal-case tracking-normal text-white outline-none focus:border-taupe/70"
-            />
-          </label>
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-2">
-              <TogglePill
-                checked={Boolean(product.signature)}
-                label={c.signatureBadge}
-                onChange={(checked) => onUpdateProduct(product.id, { signature: checked })}
-              />
-              <TogglePill
-                checked={Boolean(product.featured)}
-                label={c.featuredBadge}
-                onChange={(checked) => onUpdateProduct(product.id, { featured: checked })}
-              />
-              <TogglePill
-                checked={product.available !== false}
-                label={product.available === false ? c.unavailable : c.available}
-                onChange={(checked) => onUpdateProduct(product.id, { available: checked })}
-                icon={product.available === false ? <EyeOff size={16} /> : <Eye size={16} />}
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => onUpdateProduct(product.id, product)}
-                className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 px-4 text-sm text-white/72 transition hover:border-taupe/50 hover:bg-white/10 hover:text-white"
-              >
-                <Save size={16} />
-                {t.save}
-              </button>
-              <button
-                onClick={() => onDeleteProduct(product.id)}
-                className="inline-flex h-11 items-center gap-2 rounded-full border border-red-400/20 px-4 text-sm text-red-100/72 transition hover:border-red-300/50 hover:bg-red-500/10 hover:text-red-50"
-              >
-                <Trash2 size={16} />
-                {c.delete}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function TogglePill({
-  checked,
-  label,
-  icon,
-  onChange
-}: {
-  checked: boolean;
-  label: string;
-  icon?: ReactNode;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label
-      className={[
-        "inline-flex h-11 items-center gap-3 rounded-full border px-4 text-sm transition",
-        checked
-          ? "border-taupe/50 bg-taupe/18 text-white"
-          : "border-white/10 bg-black/20 text-white/54"
-      ].join(" ")}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="sr-only"
-      />
-      {icon}
-      <span>{label}</span>
-    </label>
-  );
-}
-
 function BottomNav({
   view,
   t,
@@ -2266,13 +1728,12 @@ function BottomNav({
   const items = [
     { id: "home" as View, label: t.lounge, icon: Home },
     { id: "menu" as View, label: t.menu, icon: Search },
-    { id: "favorites" as View, label: t.favorites, icon: Heart },
-    { id: "admin" as View, label: t.admin, icon: Edit3 }
+    { id: "favorites" as View, label: t.favorites, icon: Heart }
   ];
 
   return (
     <nav className="fixed bottom-4 left-0 right-0 z-40 px-4 pb-[env(safe-area-inset-bottom)]">
-      <div className="glass mx-auto grid h-20 max-w-md grid-cols-4 rounded-full p-2">
+      <div className="glass mx-auto grid h-20 max-w-md grid-cols-3 rounded-full p-2">
         {items.map((item) => {
           const Icon = item.icon;
           const active = view === item.id;

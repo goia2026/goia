@@ -38,6 +38,25 @@ textarea {
   font: inherit;
 }
 
+.goia-admin-input {
+  min-height: 3rem;
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  padding-left: 1rem;
+  padding-right: 1rem;
+  color: #ffffff;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  letter-spacing: 0;
+  outline: none;
+}
+
+.goia-admin-input:focus {
+  border-color: rgba(138, 118, 101, 0.72);
+}
+
 button {
   -webkit-tap-highlight-color: transparent;
   position: relative;

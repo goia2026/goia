@@ -15,7 +15,8 @@ import {
   Sparkles,
   Star,
   Trash2,
-  Upload
+  Upload,
+  X
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ChangeEvent, ReactNode } from "react";
@@ -153,7 +154,7 @@ type AdminApiResponse = SupabaseDiagnostic & {
 
 function blankProduct(): Product {
   return {
-    id: `goia-${Date.now()}`,
+    id: `goia-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     category: "chichas",
     price: 0,
     image: "",
@@ -166,6 +167,15 @@ function blankProduct(): Product {
       de: "Füge eine elegante Beschreibung hinzu.",
       en: "Add an elegant description."
     }
+  };
+}
+
+function blankDraftProduct(): Product {
+  return {
+    ...blankProduct(),
+    name: { fr: "", de: "", en: "" },
+    description: { fr: "", de: "", en: "" },
+    ingredients: { fr: "", de: "", en: "" }
   };
 }
 
@@ -211,6 +221,9 @@ export default function AdminPage() {
   const [categories, setCategories] = useState<MenuCategory[]>(initialCategories);
   const [status, setStatus] = useState<"saved" | "saving">("saved");
   const [newProductId, setNewProductId] = useState<string | null>(null);
+  const [draftProduct, setDraftProduct] = useState<Product | null>(null);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [showSeedConfirm, setShowSeedConfirm] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -296,7 +309,7 @@ export default function AdminPage() {
         text: data.error || copy.syncError
       });
       setStatus("saved");
-      return;
+      return false;
     }
     setOnlineStorage(Boolean(data.configured));
     setSyncMessage({
@@ -304,6 +317,7 @@ export default function AdminPage() {
       text: copy.saved
     });
     setStatus("saved");
+    return true;
   }
 
   function persistProducts(nextProducts: Product[]) {
@@ -320,13 +334,56 @@ export default function AdminPage() {
     if (updatedProduct) await persistProduct(updatedProduct);
   }
 
-  async function addProduct() {
-    const product = normalizeProduct(blankProduct());
-    const nextProducts = [product, ...products];
+  async function createProduct(product: Product) {
+    setCreateSaving(true);
+    const normalizedProduct = normalizeProduct(product);
+    const saved = await persistProduct(normalizedProduct);
+    setCreateSaving(false);
+    if (!saved) return;
+
+    const nextProducts = [normalizedProduct, ...products.filter((item) => item.id !== product.id)];
     setQuery("");
-    setNewProductId(product.id);
+    setNewProductId(normalizedProduct.id);
     persistProducts(nextProducts);
-    await persistProduct(product);
+    setDraftProduct(null);
+  }
+
+  async function uploadDraftImage(productId: string, file: File) {
+    setStatus("saving");
+    setCreateSaving(true);
+    const formData = new FormData();
+    formData.append("productId", productId);
+    formData.append("file", file);
+    const response = await fetch("/api/admin/upload", {
+      method: "POST",
+      body: formData
+    });
+    const data = (await response.json().catch(() => ({}))) as AdminApiResponse;
+    setSupabaseDiagnostic({
+      configured: data.configured,
+      env: data.env,
+      missing: data.missing
+    });
+
+    if (!response.ok || data.error || !data.publicUrl) {
+      setSyncMessage({
+        type: "error",
+        text: data.error || copy.syncError
+      });
+      setCreateSaving(false);
+      setStatus("saved");
+      return;
+    }
+
+    setDraftProduct((current) =>
+      current?.id === productId ? { ...current, image: data.publicUrl || "" } : current
+    );
+    setCreateSaving(false);
+    setStatus("saved");
+  }
+
+  async function addProduct() {
+    setDraftProduct(blankDraftProduct());
   }
 
   async function deleteProduct(id: string) {
@@ -580,7 +637,7 @@ export default function AdminPage() {
               {copy.reset}
             </button>
             <button
-              onClick={seedSupabaseMenu}
+              onClick={() => setShowSeedConfirm(true)}
               className="inline-flex h-14 items-center justify-center gap-2 rounded-full border border-[#8A7665]/30 bg-[#8A7665]/12 px-5 text-sm text-white transition hover:border-[#8A7665]/60 hover:bg-[#8A7665]/20"
             >
               <RotateCcw size={16} />
@@ -650,7 +707,291 @@ export default function AdminPage() {
           )}
         </section>
       </div>
+      {draftProduct && (
+        <CreateProductModal
+          categories={categories}
+          draft={draftProduct}
+          isSaving={createSaving}
+          onCancel={() => setDraftProduct(null)}
+          onChange={(patch) =>
+            setDraftProduct((current) =>
+              current ? normalizeProduct({ ...current, ...patch }) : current
+            )
+          }
+          onCreate={createProduct}
+          onImageUpload={uploadDraftImage}
+        />
+      )}
+      {showSeedConfirm && (
+        <ConfirmModal
+          isSaving={status === "saving"}
+          onCancel={() => setShowSeedConfirm(false)}
+          onConfirm={async () => {
+            setShowSeedConfirm(false);
+            await seedSupabaseMenu();
+          }}
+        />
+      )}
     </main>
+  );
+}
+
+function CreateProductModal({
+  categories,
+  draft,
+  isSaving,
+  onCancel,
+  onChange,
+  onCreate,
+  onImageUpload
+}: {
+  categories: MenuCategory[];
+  draft: Product;
+  isSaving: boolean;
+  onCancel: () => void;
+  onChange: (patch: Partial<Product>) => void;
+  onCreate: (product: Product) => void;
+  onImageUpload: (productId: string, file: File) => void;
+}) {
+  function handleUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) onImageUpload(draft.id, file);
+    event.target.value = "";
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 grid place-items-center bg-black/72 px-4 py-5 backdrop-blur-xl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-product-title"
+    >
+      <motion.section
+        initial={{ opacity: 0, y: 22, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.42, ease: luxuryEase }}
+        className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-[#8A7665]/35 bg-[#050505]/96 p-4 shadow-[0_34px_130px_rgba(0,0,0,0.72)] sm:p-6"
+      >
+        <div className="mb-5 flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+          <div>
+            <p className="flex items-center gap-2 text-xs uppercase tracking-[0.28em] text-[#8A7665]">
+              <Plus size={15} />
+              Nouveau produit
+            </p>
+            <h2 id="create-product-title" className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
+              Créer un produit
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-white/55">
+              Choisissez la catégorie, ajoutez les traductions et enregistrez dans Supabase.
+            </p>
+          </div>
+          <button
+            onClick={onCancel}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/10 text-white/60 transition hover:border-[#8A7665]/50 hover:bg-white/10 hover:text-white"
+            aria-label="Annuler"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[18rem_1fr]">
+          <div className="grid content-start gap-3">
+            <div className="relative aspect-square overflow-hidden rounded-[1.5rem] border border-white/10 bg-black">
+              {draft.image ? (
+                <img
+                  src={draft.image}
+                  alt="Photo du nouveau produit"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <PhotoPlaceholder label="Photo produit" />
+              )}
+            </div>
+            <label className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-full bg-white text-sm font-semibold text-black transition hover:bg-porcelain">
+              <Upload size={16} />
+              Importer une image
+              <input type="file" accept="image/*" onChange={handleUpload} className="sr-only" />
+            </label>
+            <label className="grid gap-2 text-xs uppercase tracking-[0.18em] text-white/42">
+              URL de l’image
+              <span className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3">
+                <ImageIcon size={16} className="text-[#8A7665]" />
+                <input
+                  value={draft.image}
+                  onChange={(event) => onChange({ image: event.target.value })}
+                  className="h-11 min-w-0 flex-1 bg-transparent text-sm normal-case tracking-normal text-white outline-none"
+                />
+              </span>
+            </label>
+          </div>
+
+          <div className="grid gap-4">
+            <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
+              <Field label="Catégorie obligatoire">
+                <select
+                  required
+                  value={draft.category}
+                  onChange={(event) => onChange({ category: event.target.value as Category })}
+                  className="goia-admin-input"
+                >
+                  {categoryOrder.map((category) => (
+                    <option key={category} value={category} className="bg-ink text-white">
+                      {categoryLabel(category, categories, "fr")}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Prix">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={draft.price}
+                  onChange={(event) => onChange({ price: Number(event.target.value) })}
+                  className="goia-admin-input text-right"
+                />
+              </Field>
+            </div>
+
+            <LocaleTextFields
+              label="Nom"
+              values={draft.name}
+              onChange={(language, value) =>
+                onChange({ name: { ...draft.name, [language]: value } })
+              }
+            />
+
+            <LocaleTextAreas
+              label="Description"
+              minHeightClassName="min-h-24"
+              values={draft.description}
+              onChange={(language, value) =>
+                onChange({ description: { ...draft.description, [language]: value } })
+              }
+            />
+
+            <LocaleTextAreas
+              label="Ingrédients optionnels"
+              minHeightClassName="min-h-20"
+              values={{
+                fr: draft.ingredients?.fr || "",
+                de: draft.ingredients?.de || "",
+                en: draft.ingredients?.en || ""
+              }}
+              onChange={(language, value) =>
+                onChange({
+                  ingredients: {
+                    fr: draft.ingredients?.fr || "",
+                    de: draft.ingredients?.de || "",
+                    en: draft.ingredients?.en || "",
+                    [language]: value
+                  }
+                })
+              }
+            />
+
+            <div className="flex flex-wrap gap-2 rounded-[1.4rem] border border-white/10 bg-black/20 p-3">
+              <TogglePill
+                checked={draft.available !== false}
+                label={draft.available === false ? "Épuisé" : "Disponible"}
+                icon={draft.available === false ? <EyeOff size={16} /> : <Eye size={16} />}
+                tone="availability"
+                onChange={(checked) => onChange({ available: checked })}
+              />
+              <TogglePill
+                checked={Boolean(draft.featured)}
+                label="Mis en avant"
+                icon={<Star size={16} />}
+                onChange={(checked) => onChange({ featured: checked })}
+              />
+              <TogglePill
+                checked={Boolean(draft.signature)}
+                label="Signature"
+                icon={<Sparkles size={16} />}
+                onChange={(checked) => onChange({ signature: checked })}
+              />
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-white/10 pt-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={onCancel}
+                className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 px-5 text-sm text-white/72 transition hover:border-[#8A7665]/50 hover:bg-white/10 hover:text-white"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => onCreate(draft)}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-white px-6 text-sm font-semibold text-black transition hover:bg-porcelain disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                <Plus size={16} />
+                {isSaving ? "Création..." : "Créer le produit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.section>
+    </motion.div>
+  );
+}
+
+function ConfirmModal({
+  isSaving,
+  onCancel,
+  onConfirm
+}: {
+  isSaving: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 grid place-items-center bg-black/72 px-4 backdrop-blur-xl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="seed-confirm-title"
+    >
+      <motion.section
+        initial={{ opacity: 0, y: 18, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.36, ease: luxuryEase }}
+        className="w-full max-w-lg rounded-[2rem] border border-red-300/25 bg-[#050505]/96 p-5 shadow-[0_34px_130px_rgba(0,0,0,0.72)] sm:p-6"
+      >
+        <p className="text-xs uppercase tracking-[0.28em] text-red-200/80">Attention</p>
+        <h2 id="seed-confirm-title" className="mt-3 text-2xl font-semibold text-white">
+          Synchroniser la carte complète ?
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-white/62">
+          Attention, ceci remplace toute la carte par les données d’origine et efface vos
+          modifications. Continuer ?
+        </p>
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 px-5 text-sm text-white/72 transition hover:border-[#8A7665]/50 hover:bg-white/10 hover:text-white"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={onConfirm}
+            className="inline-flex h-12 items-center justify-center rounded-full border border-red-300/35 bg-red-500/14 px-5 text-sm font-semibold text-red-50 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            Continuer
+          </button>
+        </div>
+      </motion.section>
+    </motion.div>
   );
 }
 

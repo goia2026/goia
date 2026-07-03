@@ -1,7 +1,27 @@
 -- GOIA full menu migration for Supabase
--- Generated from lib/menu-data.ts. Run this in the Supabase SQL editor.
+-- Reset-safe script generated from lib/menu-data.ts.
+-- Creates 11 categories and 77 products with FR/DE/EN content.
 
-create table if not exists public.categories (
+begin;
+
+drop policy if exists "Public can read product images" on storage.objects;
+
+drop table if exists public.products cascade;
+drop table if exists public.categories cascade;
+drop table if exists public.admin_users cascade;
+drop function if exists public.set_updated_at() cascade;
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+create table public.categories (
   id text primary key,
   position integer not null default 0,
   labels jsonb not null default '{"fr":"","de":"","en":""}'::jsonb,
@@ -10,7 +30,7 @@ create table if not exists public.categories (
   updated_at timestamptz not null default now()
 );
 
-create table if not exists public.products (
+create table public.products (
   id text primary key,
   category text not null references public.categories(id) on update cascade on delete restrict,
   price numeric not null default 0,
@@ -26,33 +46,43 @@ create table if not exists public.products (
   updated_at timestamptz not null default now()
 );
 
-create table if not exists public.admin_users (
+create table public.admin_users (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
-create index if not exists products_category_idx on public.products(category);
-create index if not exists categories_position_idx on public.categories(position);
+create trigger categories_set_updated_at
+before update on public.categories
+for each row execute function public.set_updated_at();
+
+create trigger products_set_updated_at
+before update on public.products
+for each row execute function public.set_updated_at();
+
+create trigger admin_users_set_updated_at
+before update on public.admin_users
+for each row execute function public.set_updated_at();
+
+create index products_category_idx on public.products(category);
+create index categories_position_idx on public.categories(position);
 
 alter table public.categories enable row level security;
 alter table public.products enable row level security;
 alter table public.admin_users enable row level security;
 
-drop policy if exists "Public menu can read categories" on public.categories;
 create policy "Public menu can read categories"
   on public.categories
   for select
   to anon, authenticated
   using (true);
 
-drop policy if exists "Public menu can read products" on public.products;
 create policy "Public menu can read products"
   on public.products
   for select
   to anon, authenticated
   using (true);
 
-drop policy if exists "Admins can manage categories" on public.categories;
 create policy "Admins can manage categories"
   on public.categories
   for all
@@ -60,7 +90,6 @@ create policy "Admins can manage categories"
   using (exists (select 1 from public.admin_users where user_id = auth.uid()))
   with check (exists (select 1 from public.admin_users where user_id = auth.uid()));
 
-drop policy if exists "Admins can manage products" on public.products;
 create policy "Admins can manage products"
   on public.products
   for all
@@ -68,28 +97,21 @@ create policy "Admins can manage products"
   using (exists (select 1 from public.admin_users where user_id = auth.uid()))
   with check (exists (select 1 from public.admin_users where user_id = auth.uid()));
 
-drop policy if exists "Admins can read admin users" on public.admin_users;
 create policy "Admins can read admin users"
   on public.admin_users
   for select
   to authenticated
   using (user_id = auth.uid());
 
--- The current GOIA admin writes through protected Next.js API routes using SUPABASE_SERVICE_ROLE_KEY.
--- If you later use Supabase Auth, add the admin user id to public.admin_users.
-
 insert into storage.buckets (id, name, public)
 values ('product_images', 'product_images', true)
 on conflict (id) do update set public = excluded.public;
 
-drop policy if exists "Public can read product images" on storage.objects;
 create policy "Public can read product images"
   on storage.objects
   for select
   to anon, authenticated
   using (bucket_id = 'product_images');
-
-begin;
 
 insert into public.categories (id, position, labels, available) values
   ('chichas', 0, '{"en":"Hookahs","fr":"Chichas","de":"Shishas"}'::jsonb, true),
@@ -102,12 +124,7 @@ insert into public.categories (id, position, labels, available) values
   ('desserts', 7, '{"en":"Desserts","fr":"Desserts","de":"Desserts"}'::jsonb, true),
   ('crepes', 8, '{"en":"Crêpes","fr":"Crêpes","de":"Crêpes"}'::jsonb, true),
   ('coupes-glacees', 9, '{"en":"Ice Cream Cups","fr":"Coupes glacées","de":"Eisbecher"}'::jsonb, true),
-  ('spiritueux', 10, '{"en":"Spirits","fr":"Spiritueux","de":"Spirituosen"}'::jsonb, true)
-on conflict (id) do update set
-  position = excluded.position,
-  labels = excluded.labels,
-  available = excluded.available,
-  updated_at = now();
+  ('spiritueux', 10, '{"en":"Spirits","fr":"Spiritueux","de":"Spirituosen"}'::jsonb, true);
 
 insert into public.products (id, category, price, image, signature, featured, available, badge, name, description, ingredients) values
   ('chicha-classique', 'chichas', 15, '/goia-classic-hookah.jpg', true, true, true, 'classic', '{"en":"Chicha Classique","fr":"Chicha Classique","de":"Chicha Classique"}'::jsonb, '{"en":"Traditional hookah with all available flavors.","fr":"Chicha traditionnelle avec tous les parfums disponibles.","de":"Traditionelle Shisha mit allen verfügbaren Sorten."}'::jsonb, null),
@@ -186,26 +203,10 @@ insert into public.products (id, category, price, image, signature, featured, av
   ('gin', 'spiritueux', 7, 'data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' viewBox=''0 0 1200 900''%3E%3Cdefs%3E%3CradialGradient id=''g'' cx=''50%25'' cy=''30%25'' r=''74%25''%3E%3Cstop offset=''0'' stop-color=''%23c8a45b'' stop-opacity=''.44''/%3E%3Cstop offset=''.5'' stop-color=''%238a7665'' stop-opacity=''.24''/%3E%3Cstop offset=''1'' stop-color=''%23000000''/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=''1200'' height=''900'' fill=''url(%23g)''/%3E%3Crect x=''500'' y=''210'' width=''200'' height=''490'' rx=''44'' fill=''none'' stroke=''%23f6e6bd'' stroke-width=''18''/%3E%3Cpath d=''M552 210v-82h96v82M530 420h140'' fill=''none'' stroke=''%23c8a45b'' stroke-width=''18'' stroke-linecap=''round''/%3E%3Ctext x=''600'' y=''815'' text-anchor=''middle'' fill=''%23f6e6bd'' font-family=''Arial'' font-size=''42'' letter-spacing=''10''%3EGOIA SPIRITS%3C/text%3E%3C/svg%3E', true, true, true, null, '{"en":"Gin","fr":"Gin","de":"Gin"}'::jsonb, '{"en":"Classic gin serve with a clean botanical profile.","fr":"Service gin classique au profil botanique net.","de":"Klassischer Gin Service mit klarem botanischem Profil."}'::jsonb, null),
   ('havana-club-rum', 'spiritueux', 7, 'data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' viewBox=''0 0 1200 900''%3E%3Cdefs%3E%3CradialGradient id=''g'' cx=''50%25'' cy=''30%25'' r=''74%25''%3E%3Cstop offset=''0'' stop-color=''%23c8a45b'' stop-opacity=''.44''/%3E%3Cstop offset=''.5'' stop-color=''%238a7665'' stop-opacity=''.24''/%3E%3Cstop offset=''1'' stop-color=''%23000000''/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=''1200'' height=''900'' fill=''url(%23g)''/%3E%3Crect x=''500'' y=''210'' width=''200'' height=''490'' rx=''44'' fill=''none'' stroke=''%23f6e6bd'' stroke-width=''18''/%3E%3Cpath d=''M552 210v-82h96v82M530 420h140'' fill=''none'' stroke=''%23c8a45b'' stroke-width=''18'' stroke-linecap=''round''/%3E%3Ctext x=''600'' y=''815'' text-anchor=''middle'' fill=''%23f6e6bd'' font-family=''Arial'' font-size=''42'' letter-spacing=''10''%3EGOIA SPIRITS%3C/text%3E%3C/svg%3E', true, true, true, null, '{"en":"Havana Club","fr":"Rhum Havana Club","de":"Havana Club"}'::jsonb, '{"en":"Cuban rum with warm, rounded lounge notes.","fr":"Rhum cubain aux notes chaudes et rondes.","de":"Kubanischer Rum mit warmen, runden Lounge-Noten."}'::jsonb, null),
   ('ciroc', 'spiritueux', 10, 'data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' viewBox=''0 0 1200 900''%3E%3Cdefs%3E%3CradialGradient id=''g'' cx=''50%25'' cy=''30%25'' r=''74%25''%3E%3Cstop offset=''0'' stop-color=''%23c8a45b'' stop-opacity=''.44''/%3E%3Cstop offset=''.5'' stop-color=''%238a7665'' stop-opacity=''.24''/%3E%3Cstop offset=''1'' stop-color=''%23000000''/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=''1200'' height=''900'' fill=''url(%23g)''/%3E%3Crect x=''500'' y=''210'' width=''200'' height=''490'' rx=''44'' fill=''none'' stroke=''%23f6e6bd'' stroke-width=''18''/%3E%3Cpath d=''M552 210v-82h96v82M530 420h140'' fill=''none'' stroke=''%23c8a45b'' stroke-width=''18'' stroke-linecap=''round''/%3E%3Ctext x=''600'' y=''815'' text-anchor=''middle'' fill=''%23f6e6bd'' font-family=''Arial'' font-size=''42'' letter-spacing=''10''%3EGOIA SPIRITS%3C/text%3E%3C/svg%3E', true, true, true, null, '{"en":"Cîroc","fr":"Cîroc","de":"Cîroc"}'::jsonb, '{"en":"Ultra-premium vodka with a smooth, refined character.","fr":"Vodka ultra-premium au caractère doux et raffiné.","de":"Ultra-Premium Vodka mit weichem, raffiniertem Charakter."}'::jsonb, null),
-  ('grey-goose', 'spiritueux', 10, 'data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' viewBox=''0 0 1200 900''%3E%3Cdefs%3E%3CradialGradient id=''g'' cx=''50%25'' cy=''30%25'' r=''74%25''%3E%3Cstop offset=''0'' stop-color=''%23c8a45b'' stop-opacity=''.44''/%3E%3Cstop offset=''.5'' stop-color=''%238a7665'' stop-opacity=''.24''/%3E%3Cstop offset=''1'' stop-color=''%23000000''/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=''1200'' height=''900'' fill=''url(%23g)''/%3E%3Crect x=''500'' y=''210'' width=''200'' height=''490'' rx=''44'' fill=''none'' stroke=''%23f6e6bd'' stroke-width=''18''/%3E%3Cpath d=''M552 210v-82h96v82M530 420h140'' fill=''none'' stroke=''%23c8a45b'' stroke-width=''18'' stroke-linecap=''round''/%3E%3Ctext x=''600'' y=''815'' text-anchor=''middle'' fill=''%23f6e6bd'' font-family=''Arial'' font-size=''42'' letter-spacing=''10''%3EGOIA SPIRITS%3C/text%3E%3C/svg%3E', true, true, true, null, '{"en":"Grey Goose","fr":"Grey Goose","de":"Grey Goose"}'::jsonb, '{"en":"French premium vodka, elegant, smooth and crystalline.","fr":"Vodka premium française, élégante, douce et cristalline.","de":"Französischer Premium Vodka, elegant, weich und klar."}'::jsonb, null)
-on conflict (id) do update set
-  category = excluded.category,
-  price = excluded.price,
-  image = excluded.image,
-  signature = excluded.signature,
-  featured = excluded.featured,
-  available = excluded.available,
-  badge = excluded.badge,
-  name = excluded.name,
-  description = excluded.description,
-  ingredients = excluded.ingredients,
-  updated_at = now();
-
-delete from public.products
-where id not in ('chicha-classique', 'quasar-premium', 'quasar-tete-quasar', 'coca-cola', 'coca-cola-zero', 'sprite', 'fanta', 'red-bull', 'elephant-bay', 'bissap', 'orange-juice', 'apple-juice', 'pineapple-juice', 'syrups', 'diabolo', 'still-water', 'sparkling-water', 'moroccan-tea-small', 'moroccan-tea-large', 'espresso', 'double-espresso', 'americano', 'cappuccino', 'latte-macchiato', 'iced-latte-macchiato-vanilla', 'iced-latte-macchiato-caramel', 'mojito-classic', 'mojito-fraise', 'mojito-framboise', 'mojito-mangue', 'mojito-passion', 'gin-berry', 'fresh-pasteque', 'tiki-mangue', 'pornstar-martini', 'rubis-des-iles', 'virgin-mojito', 'virgin-mojito-fraise', 'virgin-mojito-framboise', 'virgin-mojito-mangue', 'virgin-mojito-passion', 'peach-mint', 'nuage-tropical', 'rouge-frisson', 'golden-fizz', 'soleil-tropical', 'rubis-hibiscus', 'cheesecake-pistache', 'cheesecake-mangue-passion', 'cheesecake-fruits-rouges', 'cheesecake-speculoos', 'tarte-au-citron', 'mousse-au-chocolat', 'sunset-crepe', 'lotus-crepe', 'royal-caramel-crepe', 'pistachio-crepe', 'coupe-sunset', 'coupe-tropical', 'coupe-caramel-crown', 'coupe-goia-signature', 'milkshake-vanille', 'milkshake-oreo', 'milkshake-kinder-bueno-classic', 'milkshake-kinder-bueno-white', 'smoothie-funny-berry', 'smoothie-pinky-groovy', 'smoothie-coconut-forever', 'smoothie-crazy-melon', 'absolut-vodka', 'jack-daniels-original', 'jack-daniels-honey', 'jack-daniels-apple', 'gin', 'havana-club-rum', 'ciroc', 'grey-goose');
-
-delete from public.categories
-where id not in ('chichas', 'cocktails', 'mocktails', 'softs-juices', 'hot-drinks', 'milkshakes', 'smoothies', 'desserts', 'crepes', 'coupes-glacees', 'spiritueux');
+  ('grey-goose', 'spiritueux', 10, 'data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' viewBox=''0 0 1200 900''%3E%3Cdefs%3E%3CradialGradient id=''g'' cx=''50%25'' cy=''30%25'' r=''74%25''%3E%3Cstop offset=''0'' stop-color=''%23c8a45b'' stop-opacity=''.44''/%3E%3Cstop offset=''.5'' stop-color=''%238a7665'' stop-opacity=''.24''/%3E%3Cstop offset=''1'' stop-color=''%23000000''/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=''1200'' height=''900'' fill=''url(%23g)''/%3E%3Crect x=''500'' y=''210'' width=''200'' height=''490'' rx=''44'' fill=''none'' stroke=''%23f6e6bd'' stroke-width=''18''/%3E%3Cpath d=''M552 210v-82h96v82M530 420h140'' fill=''none'' stroke=''%23c8a45b'' stroke-width=''18'' stroke-linecap=''round''/%3E%3Ctext x=''600'' y=''815'' text-anchor=''middle'' fill=''%23f6e6bd'' font-family=''Arial'' font-size=''42'' letter-spacing=''10''%3EGOIA SPIRITS%3C/text%3E%3C/svg%3E', true, true, true, null, '{"en":"Grey Goose","fr":"Grey Goose","de":"Grey Goose"}'::jsonb, '{"en":"French premium vodka, elegant, smooth and crystalline.","fr":"Vodka premium française, élégante, douce et cristalline.","de":"Französischer Premium Vodka, elegant, weich und klar."}'::jsonb, null);
 
 commit;
 
 -- Expected import size: 11 categories, 77 products.
+-- Admin writes in the GOIA app go through protected Next.js API routes using SUPABASE_SERVICE_ROLE_KEY.
+-- If you later use Supabase Auth directly, add the admin auth.users.id to public.admin_users.

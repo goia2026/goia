@@ -378,11 +378,11 @@ export default function HomePage() {
       supabaseClient.from("products").select("*"),
       supabaseClient.from("categories").select("*").order("position", { ascending: true })
     ]).then(([productsResult, categoriesResult]) => {
-      if (productsResult.data?.length) {
+      if (productsResult.data) {
         setProducts((productsResult.data as Product[]).map(normalizeProduct));
       }
 
-      if (categoriesResult.data?.length) {
+      if (categoriesResult.data) {
         const liveCategories = (categoriesResult.data as MenuCategory[])
           .filter((item) => isCategory(item.id))
           .map((item) => ({
@@ -390,7 +390,7 @@ export default function HomePage() {
             labels: { ...categoryLabels[item.id], ...item.labels }
           }));
         setCategories(liveCategories);
-        setLabels(labelsFromCategories(liveCategories));
+        setLabels(liveCategories.length ? labelsFromCategories(liveCategories) : categoryLabels);
       }
     });
 
@@ -401,7 +401,7 @@ export default function HomePage() {
           .from("products")
           .select("*")
           .then(({ data }) => {
-            if (data?.length) setProducts((data as Product[]).map(normalizeProduct));
+            if (data) setProducts((data as Product[]).map(normalizeProduct));
           });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, () => {
@@ -410,7 +410,7 @@ export default function HomePage() {
           .select("*")
           .order("position", { ascending: true })
           .then(({ data }) => {
-            if (data?.length) {
+            if (data) {
               const liveCategories = (data as MenuCategory[])
                 .filter((item) => isCategory(item.id))
                 .map((item) => ({
@@ -418,7 +418,7 @@ export default function HomePage() {
                   labels: { ...categoryLabels[item.id], ...item.labels }
                 }));
               setCategories(liveCategories);
-              setLabels(labelsFromCategories(liveCategories));
+              setLabels(liveCategories.length ? labelsFromCategories(liveCategories) : categoryLabels);
             }
           });
       });

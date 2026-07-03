@@ -9,13 +9,6 @@ import {
 export async function POST(request: Request) {
   const adminPassword = getAdminPassword();
 
-  if (!adminPassword) {
-    return NextResponse.json(
-      { error: "GOIA_ADMIN_PASSWORD is missing." },
-      { status: 500 }
-    );
-  }
-
   const { password } = (await request.json().catch(() => ({}))) as { password?: string };
 
   if (!password || password !== adminPassword) {

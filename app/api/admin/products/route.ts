@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Product } from "@/lib/menu-data";
 import { verifyAdminRequest } from "@/lib/admin-auth";
+import { normalizeAdminProduct } from "@/app/api/admin/normalize";
 import {
   isSupabaseAdminConfigured,
   missingSupabaseAdminEnv,
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
     return NextResponse.json(supabaseDiagnostic(), { status: 500 });
   }
 
-  const product = (await request.json()) as Product;
+  const product = normalizeAdminProduct((await request.json()) as Product);
   const { error } = await supabaseAdmin.from("products").upsert(product);
 
   if (error) {

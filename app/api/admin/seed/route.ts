@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { initialCategories, initialProducts } from "@/lib/menu-data";
 import { verifyAdminRequest } from "@/lib/admin-auth";
+import { normalizeAdminCategory, normalizeAdminProduct } from "@/app/api/admin/normalize";
 import {
   isSupabaseAdminConfigured,
   missingSupabaseAdminEnv,
@@ -26,23 +27,25 @@ export async function POST(request: Request) {
     return NextResponse.json(supabaseDiagnostic(), { status: 500 });
   }
   const admin = supabaseAdmin;
+  const normalizedCategories = initialCategories.map(normalizeAdminCategory);
+  const normalizedProducts = initialProducts.map(normalizeAdminProduct);
 
   const { error: categoryError } = await admin
     .from("categories")
-    .upsert(initialCategories);
+    .upsert(normalizedCategories);
 
   if (categoryError) {
     return NextResponse.json({ ...supabaseDiagnostic(), error: categoryError.message }, { status: 500 });
   }
 
-  const { error: productError } = await admin.from("products").upsert(initialProducts);
+  const { error: productError } = await admin.from("products").upsert(normalizedProducts);
 
   if (productError) {
     return NextResponse.json({ ...supabaseDiagnostic(), error: productError.message }, { status: 500 });
   }
 
-  const currentCategoryIds = new Set<string>(initialCategories.map((category) => category.id));
-  const currentProductIds = new Set(initialProducts.map((product) => product.id));
+  const currentCategoryIds = new Set<string>(normalizedCategories.map((category) => category.id));
+  const currentProductIds = new Set(normalizedProducts.map((product) => product.id));
 
   const { data: storedCategories, error: storedCategoryError } = await admin
     .from("categories")
@@ -85,8 +88,8 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ...supabaseDiagnostic(),
-    categories: initialCategories.length,
-    products: initialProducts.length,
+    categories: normalizedCategories.length,
+    products: normalizedProducts.length,
     removedCategories: staleCategoryIds.length,
     removedProducts: staleProductIds.length
   });

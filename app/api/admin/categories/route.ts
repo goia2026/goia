@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { MenuCategory } from "@/lib/menu-data";
 import { verifyAdminRequest } from "@/lib/admin-auth";
+import { normalizeAdminCategory } from "@/app/api/admin/normalize";
 import {
   isSupabaseAdminConfigured,
   missingSupabaseAdminEnv,
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     return NextResponse.json(supabaseDiagnostic(), { status: 500 });
   }
 
-  const category = (await request.json()) as MenuCategory;
+  const category = normalizeAdminCategory((await request.json()) as MenuCategory);
   const { error } = await supabaseAdmin.from("categories").upsert(category);
 
   if (error) {

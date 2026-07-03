@@ -56,7 +56,7 @@ const adminCopy = {
     category: "Catégorie",
     price: "Prix",
     available: "Disponible",
-    unavailable: "Indisponible",
+    unavailable: "Épuisé",
     featured: "Mis en avant",
     signature: "Signature",
     delete: "Supprimer",
@@ -90,7 +90,7 @@ const adminCopy = {
     category: "Kategorie",
     price: "Preis",
     available: "Verfügbar",
-    unavailable: "Nicht verfügbar",
+    unavailable: "Ausverkauft",
     featured: "Highlight",
     signature: "Signature",
     delete: "Löschen",
@@ -124,7 +124,7 @@ const adminCopy = {
     category: "Category",
     price: "Price",
     available: "Available",
-    unavailable: "Unavailable",
+    unavailable: "Sold out",
     featured: "Featured",
     signature: "Signature",
     delete: "Delete",
@@ -794,6 +794,7 @@ function AdminProductCard({
                 checked={product.available !== false}
                 label={product.available === false ? copy.unavailable : copy.available}
                 icon={product.available === false ? <EyeOff size={16} /> : <Eye size={16} />}
+                tone="availability"
                 onChange={(checked) => onUpdateProduct(product.id, { available: checked })}
               />
               <TogglePill
@@ -935,20 +936,29 @@ function TogglePill({
   checked,
   label,
   icon,
+  tone = "default",
   onChange
 }: {
   checked: boolean;
   label: string;
   icon?: ReactNode;
+  tone?: "default" | "availability";
   onChange: (checked: boolean) => void;
 }) {
+  const checkedClass =
+    tone === "availability"
+      ? "border-emerald-300/45 bg-emerald-400/14 text-emerald-50 shadow-[0_0_24px_rgba(52,211,153,0.12)]"
+      : "border-[#8A7665]/50 bg-[#8A7665]/18 text-white";
+  const uncheckedClass =
+    tone === "availability"
+      ? "border-red-300/28 bg-red-500/10 text-red-50/82 shadow-[0_0_24px_rgba(248,113,113,0.08)]"
+      : "border-white/10 bg-black/20 text-white/54";
+
   return (
     <label
       className={[
         "inline-flex h-11 cursor-pointer items-center gap-3 rounded-full border px-4 text-sm transition",
-        checked
-          ? "border-[#8A7665]/50 bg-[#8A7665]/18 text-white"
-          : "border-white/10 bg-black/20 text-white/54"
+        checked ? checkedClass : uncheckedClass
       ].join(" ")}
     >
       <input
@@ -957,6 +967,14 @@ function TogglePill({
         onChange={(event) => onChange(event.target.checked)}
         className="sr-only"
       />
+      {tone === "availability" && (
+        <span
+          className={[
+            "h-2.5 w-2.5 rounded-full shadow-[0_0_16px_currentColor]",
+            checked ? "bg-emerald-300 text-emerald-300" : "bg-red-300 text-red-300"
+          ].join(" ")}
+        />
+      )}
       {icon}
       <span>{label}</span>
     </label>

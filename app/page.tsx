@@ -74,6 +74,7 @@ type AppCopy = {
   category: string;
   unavailable: string;
   available: string;
+  soldOut: string;
   delete: string;
   pricePlaceholder: string;
   ingredients: string;
@@ -154,6 +155,7 @@ const appCopy: Record<Locale, AppCopy> = {
     category: "Catégorie",
     unavailable: "Indisponible",
     available: "Disponible",
+    soldOut: "Épuisé",
     delete: "Supprimer",
     pricePlaceholder: "Prix à venir",
     ingredients: "Ingrédients",
@@ -208,6 +210,7 @@ const appCopy: Record<Locale, AppCopy> = {
     category: "Kategorie",
     unavailable: "Nicht verfügbar",
     available: "Verfügbar",
+    soldOut: "Ausverkauft",
     delete: "Löschen",
     pricePlaceholder: "Preis folgt",
     ingredients: "Zutaten",
@@ -262,6 +265,7 @@ const appCopy: Record<Locale, AppCopy> = {
     category: "Category",
     unavailable: "Unavailable",
     available: "Available",
+    soldOut: "Sold out",
     delete: "Delete",
     pricePlaceholder: "Price coming soon",
     ingredients: "Ingredients",
@@ -433,13 +437,8 @@ export default function HomePage() {
     writeJson("goia:favorites", favorites);
   }, [favorites]);
 
-  const visibleProducts = useMemo(
-    () => products.filter((product) => product.available !== false),
-    [products]
-  );
-
   const filteredProducts = useMemo(() => {
-    const source = visibleProducts;
+    const source = products;
     const normalizedQuery = query.trim().toLowerCase();
 
     return source.filter((product) => {
@@ -459,7 +458,7 @@ export default function HomePage() {
 
       return categoryMatch && favoriteMatch && searchText.includes(normalizedQuery);
     });
-  }, [category, favorites, labels, locale, query, view, visibleProducts]);
+  }, [category, favorites, labels, locale, products, query, view]);
 
   function enterLounge() {
     setEntered(true);
@@ -504,7 +503,7 @@ export default function HomePage() {
                 categories={categories}
                 locale={locale}
                 labels={labels}
-                products={visibleProducts}
+                products={products}
                 setCategory={setCategory}
               />
               <ProductGrid
@@ -1327,6 +1326,7 @@ function ProductGrid({
             const badge = getProductBadge(product, locale);
             const isChichaProduct = product.category === "chichas";
             const isChichaOpen = openChichaId === product.id;
+            const isUnavailable = product.available === false;
 
             return (
             <motion.div
@@ -1340,9 +1340,10 @@ function ProductGrid({
             >
             <motion.article
               layout
-              whileHover={{ y: -8, scale: 1.012 }}
+              whileHover={isUnavailable ? undefined : { y: -8, scale: 1.012 }}
               transition={{ duration: 0.48, ease: luxuryEase }}
               onClick={() => {
+                if (isUnavailable) return;
                 if (isChichaProduct) {
                   setOpenChichaId((current) => (current === product.id ? null : product.id));
                   return;
@@ -1351,24 +1352,39 @@ function ProductGrid({
               }}
               role="button"
               tabIndex={0}
+              aria-disabled={isUnavailable}
               onKeyDown={(event) => {
                 if (event.key !== "Enter" && event.key !== " ") return;
                 event.preventDefault();
+                if (isUnavailable) return;
                 if (isChichaProduct) {
                   setOpenChichaId((current) => (current === product.id ? null : product.id));
                   return;
                 }
                 onOpen(product);
               }}
-              className="group relative flex h-full min-h-[29rem] flex-col overflow-hidden rounded-[1.9rem] border border-[#C8A45B]/18 bg-black/64 shadow-[0_24px_90px_rgba(0,0,0,0.46)] backdrop-blur-2xl transition hover:border-[#C8A45B]/50 hover:shadow-[0_34px_120px_rgba(0,0,0,0.58)]"
+              className={[
+                "group relative flex h-full min-h-[29rem] flex-col overflow-hidden rounded-[1.9rem] border bg-black/64 shadow-[0_24px_90px_rgba(0,0,0,0.46)] backdrop-blur-2xl transition",
+                isUnavailable
+                  ? "cursor-not-allowed border-white/10 opacity-55 grayscale-[0.35]"
+                  : "border-[#C8A45B]/18 hover:border-[#C8A45B]/50 hover:shadow-[0_34px_120px_rgba(0,0,0,0.58)]"
+              ].join(" ")}
             >
-              <div className="pointer-events-none absolute -inset-12 bg-[radial-gradient(circle_at_50%_20%,rgba(200,164,91,0.24),transparent_42%)] opacity-60 blur-2xl transition duration-500 group-hover:opacity-95" />
+              <div
+                className={[
+                  "pointer-events-none absolute -inset-12 bg-[radial-gradient(circle_at_50%_20%,rgba(200,164,91,0.24),transparent_42%)] blur-2xl transition duration-500",
+                  isUnavailable ? "opacity-20" : "opacity-60 group-hover:opacity-95"
+                ].join(" ")}
+              />
               <div className="relative h-[17.5rem] overflow-hidden bg-black sm:h-[20rem]">
                 {product.image ? (
                   <ProductImage
                     src={product.image}
                     alt={product.name[locale]}
-                    className="h-full w-full transition duration-700 group-hover:scale-105"
+                    className={[
+                      "h-full w-full transition duration-700",
+                      isUnavailable ? "scale-100" : "group-hover:scale-105"
+                    ].join(" ")}
                   />
                 ) : (
                   <ProductPhotoPlaceholder
@@ -1377,6 +1393,7 @@ function ProductGrid({
                   />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/12 to-transparent" />
+                {isUnavailable && <div className="absolute inset-0 bg-black/42" />}
                 <span className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-[#C8A45B]/30 bg-black/42 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-[#F2D991] backdrop-blur-xl">
                   {getCategoryIcon(product.category)}
                   {labels[product.category][locale]}
@@ -1387,16 +1404,28 @@ function ProductGrid({
                 <button
                   onClick={(event) => {
                     event.stopPropagation();
+                    if (isUnavailable) return;
                     onToggleFavorite(product.id);
                   }}
+                  disabled={isUnavailable}
                   aria-label="Favorite"
-                  className="absolute right-4 top-16 flex h-11 w-11 items-center justify-center rounded-full bg-black/38 text-white backdrop-blur-xl transition hover:bg-white hover:text-ink"
+                  className={[
+                    "absolute right-4 top-16 flex h-11 w-11 items-center justify-center rounded-full bg-black/38 text-white backdrop-blur-xl transition",
+                    isUnavailable
+                      ? "cursor-not-allowed opacity-45"
+                      : "hover:bg-white hover:text-ink"
+                  ].join(" ")}
                 >
                   <Heart
                     size={19}
                     fill={favorites.includes(product.id) ? "currentColor" : "none"}
                   />
                 </button>
+                {isUnavailable && (
+                  <span className="absolute bottom-4 right-4 rounded-full border border-red-200/25 bg-red-500/16 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-red-50 shadow-[0_0_30px_rgba(248,113,113,0.14)] backdrop-blur-xl">
+                    {c.soldOut}
+                  </span>
+                )}
                 {badge && (
                   <span className="absolute bottom-4 left-4 rounded-full border border-[#C8A45B]/45 bg-black/38 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F2D991] shadow-[0_0_30px_rgba(200,164,91,0.18)] backdrop-blur-xl">
                     {badge}
@@ -1418,7 +1447,7 @@ function ProductGrid({
                       </p>
                     )}
                   </div>
-                  {isChichaProduct && (
+                  {isChichaProduct && !isUnavailable && (
                     <motion.span
                       animate={{ rotate: isChichaOpen ? 90 : 0 }}
                       transition={{ duration: 0.28, ease: luxuryEase }}
@@ -1444,7 +1473,7 @@ function ProductGrid({
               </div>
             </motion.article>
             <AnimatePresence initial={false}>
-              {isChichaProduct && isChichaOpen && (
+              {isChichaProduct && !isUnavailable && isChichaOpen && (
                 <motion.div
                   key={`${product.id}-flavors`}
                   layout

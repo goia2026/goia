@@ -1230,6 +1230,7 @@ function ProductGrid({
   onToggleFavorite: (id: string) => void;
 }) {
   const c = appCopy[locale];
+  const [openChichaId, setOpenChichaId] = useState<string | null>(null);
 
   if (!products.length) {
     const placeholderTitle = activeCategory ? labels[activeCategory][locale] : "GOIA";
@@ -1324,17 +1325,41 @@ function ProductGrid({
         <AnimatePresence mode="popLayout">
           {products.map((product) => {
             const badge = getProductBadge(product, locale);
+            const isChichaProduct = product.category === "chichas";
+            const isChichaOpen = openChichaId === product.id;
 
             return (
-            <motion.article
+            <motion.div
               layout
               key={product.id}
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.48, ease: luxuryEase }}
+              className="grid h-full gap-3"
+            >
+            <motion.article
+              layout
               whileHover={{ y: -8, scale: 1.012 }}
               transition={{ duration: 0.48, ease: luxuryEase }}
-              onClick={() => onOpen(product)}
+              onClick={() => {
+                if (isChichaProduct) {
+                  setOpenChichaId((current) => (current === product.id ? null : product.id));
+                  return;
+                }
+                onOpen(product);
+              }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                if (isChichaProduct) {
+                  setOpenChichaId((current) => (current === product.id ? null : product.id));
+                  return;
+                }
+                onOpen(product);
+              }}
               className="group relative flex h-full min-h-[29rem] flex-col overflow-hidden rounded-[1.9rem] border border-[#C8A45B]/18 bg-black/64 shadow-[0_24px_90px_rgba(0,0,0,0.46)] backdrop-blur-2xl transition hover:border-[#C8A45B]/50 hover:shadow-[0_34px_120px_rgba(0,0,0,0.58)]"
             >
               <div className="pointer-events-none absolute -inset-12 bg-[radial-gradient(circle_at_50%_20%,rgba(200,164,91,0.24),transparent_42%)] opacity-60 blur-2xl transition duration-500 group-hover:opacity-95" />
@@ -1393,6 +1418,15 @@ function ProductGrid({
                       </p>
                     )}
                   </div>
+                  {isChichaProduct && (
+                    <motion.span
+                      animate={{ rotate: isChichaOpen ? 90 : 0 }}
+                      transition={{ duration: 0.28, ease: luxuryEase }}
+                      className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#C8A45B]/34 bg-[#C8A45B]/10 text-[#F2D991] shadow-[0_0_24px_rgba(200,164,91,0.12)]"
+                    >
+                      ▸
+                    </motion.span>
+                  )}
                 </div>
                 <p className="mt-5 min-h-12 text-sm leading-6 text-white/60">
                   {product.description[locale]}
@@ -1409,34 +1443,62 @@ function ProductGrid({
                 )}
               </div>
             </motion.article>
+            <AnimatePresence initial={false}>
+              {isChichaProduct && isChichaOpen && (
+                <motion.div
+                  key={`${product.id}-flavors`}
+                  layout
+                  initial={{ opacity: 0, height: 0, y: -8, filter: "blur(8px)" }}
+                  animate={{ opacity: 1, height: "auto", y: 0, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, height: 0, y: -8, filter: "blur(8px)" }}
+                  transition={{ duration: 0.42, ease: luxuryEase }}
+                  className="overflow-hidden"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <ChichaFlavorPanel locale={locale} compact />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            </motion.div>
             );
           })}
         </AnimatePresence>
       </motion.div>
-
-      {isChichasPage && <ChichaFlavorSection locale={locale} />}
     </motion.section>
   );
 }
 
 function ChichaFlavorSection({ locale }: { locale: Locale }) {
+  return <ChichaFlavorPanel locale={locale} />;
+}
+
+function ChichaFlavorPanel({
+  locale,
+  compact = false
+}: {
+  locale: Locale;
+  compact?: boolean;
+}) {
   const c = appCopy[locale];
 
   return (
-    <div className="grid gap-5">
+    <div className={compact ? "grid gap-3" : "grid gap-5"}>
       <motion.section
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.55, ease: luxuryEase }}
-        className="relative overflow-hidden rounded-[2rem] border border-[#C8A45B]/18 bg-black/46 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-2xl sm:p-6"
+        className={[
+          "relative overflow-hidden border border-[#C8A45B]/18 bg-black/46 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-2xl",
+          compact ? "rounded-[1.45rem] p-4" : "rounded-[2rem] p-5 sm:p-6"
+        ].join(" ")}
       >
         <div className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-[#C8A45B]/12 blur-3xl" />
         <div className="relative">
           <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">GOIA Chichas</p>
-          <h3 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
+          <h3 className={compact ? "mt-2 text-xl font-semibold text-white" : "mt-2 text-2xl font-semibold text-white sm:text-3xl"}>
             {c.signatureMixes}
           </h3>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className={compact ? "mt-4 grid gap-2.5" : "mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"}>
             {signatureMixes.map((mix, index) => (
               <motion.article
                 key={mix.name}
@@ -1444,14 +1506,19 @@ function ChichaFlavorSection({ locale }: { locale: Locale }) {
                 animate={{ opacity: 1, y: 0 }}
                 whileHover={{ y: -3, scale: 1.01 }}
                 transition={{ delay: index * 0.035, duration: 0.38, ease: luxuryEase }}
-                className="group relative min-h-36 overflow-hidden rounded-[1.35rem] border border-[#C8A45B]/18 bg-black/46 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl transition hover:border-[#C8A45B]/45"
+                className={[
+                  "group relative overflow-hidden rounded-[1.35rem] border border-[#C8A45B]/18 bg-black/46 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl transition hover:border-[#C8A45B]/45",
+                  compact ? "min-h-28 p-3" : "min-h-36 p-4"
+                ].join(" ")}
               >
                 <div className="pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-[#C8A45B]/10 blur-2xl transition group-hover:bg-[#C8A45B]/18" />
                 <div className="relative flex h-full flex-col justify-between gap-5">
                   <div className="flex items-start justify-between gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#C8A45B]/30 bg-[#C8A45B]/10 text-[#C8A45B]">
-                      <Cloud size={19} strokeWidth={1.7} />
-                    </span>
+                    {!compact && (
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#C8A45B]/30 bg-[#C8A45B]/10 text-[#C8A45B]">
+                        <Cloud size={19} strokeWidth={1.7} />
+                      </span>
+                    )}
                     {mix.badge && (
                       <span className="rounded-full border border-[#C8A45B]/40 bg-[#C8A45B]/12 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-[#F2D991]">
                         {mix.badge === "signature"
@@ -1461,8 +1528,8 @@ function ChichaFlavorSection({ locale }: { locale: Locale }) {
                     )}
                   </div>
                   <div>
-                    <h4 className="text-xl font-semibold leading-tight text-white">{mix.name}</h4>
-                    <p className="mt-2 text-sm leading-6 text-white/58">{mix.notes[locale]}</p>
+                    <h4 className={compact ? "text-base font-semibold leading-tight text-white" : "text-xl font-semibold leading-tight text-white"}>{mix.name}</h4>
+                    <p className={compact ? "mt-1.5 text-xs leading-5 text-white/58" : "mt-2 text-sm leading-6 text-white/58"}>{mix.notes[locale]}</p>
                   </div>
                 </div>
               </motion.article>
@@ -1475,22 +1542,28 @@ function ChichaFlavorSection({ locale }: { locale: Locale }) {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.08, duration: 0.55, ease: luxuryEase }}
-        className="relative overflow-hidden rounded-[2rem] border border-[#C8A45B]/18 bg-black/38 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.30)] backdrop-blur-2xl sm:p-6"
+        className={[
+          "relative overflow-hidden border border-[#C8A45B]/18 bg-black/38 shadow-[0_24px_90px_rgba(0,0,0,0.30)] backdrop-blur-2xl",
+          compact ? "rounded-[1.45rem] p-4" : "rounded-[2rem] p-5 sm:p-6"
+        ].join(" ")}
       >
         <div className="pointer-events-none absolute -left-16 bottom-0 h-40 w-40 rounded-full bg-[#C8A45B]/10 blur-3xl" />
         <div className="relative">
           <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">GOIA Chichas</p>
-          <h3 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
+          <h3 className={compact ? "mt-2 text-xl font-semibold text-white" : "mt-2 text-2xl font-semibold text-white sm:text-3xl"}>
             {c.classicFlavors}
           </h3>
-          <div className="mt-5 flex flex-wrap gap-2.5">
+          <div className={compact ? "mt-4 flex flex-wrap gap-2" : "mt-5 flex flex-wrap gap-2.5"}>
             {classicChichaFlavors.map((flavor, index) => (
               <motion.span
                 key={flavor.fr}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.035, duration: 0.35, ease: luxuryEase }}
-                className="rounded-full border border-[#C8A45B]/48 bg-[#C8A45B]/8 px-4 py-2 text-sm font-medium text-[#F2D991] shadow-[0_0_28px_rgba(200,164,91,0.08)] backdrop-blur-xl"
+                className={[
+                  "rounded-full border border-[#C8A45B]/48 bg-[#C8A45B]/8 font-medium text-[#F2D991] shadow-[0_0_28px_rgba(200,164,91,0.08)] backdrop-blur-xl",
+                  compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"
+                ].join(" ")}
               >
                 {flavor[locale]}
               </motion.span>

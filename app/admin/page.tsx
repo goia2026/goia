@@ -210,6 +210,7 @@ export default function AdminPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<MenuCategory[]>(initialCategories);
   const [status, setStatus] = useState<"saved" | "saving">("saved");
+  const [newProductId, setNewProductId] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -276,8 +277,8 @@ export default function AdminPage() {
   }, [locale, products, query]);
 
   async function persistProduct(product: Product) {
-    if (!onlineStorage) return;
     setStatus("saving");
+    setSyncMessage(null);
     const response = await fetch("/api/admin/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -297,6 +298,7 @@ export default function AdminPage() {
       setStatus("saved");
       return;
     }
+    setOnlineStorage(Boolean(data.configured));
     setSyncMessage({
       type: "success",
       text: copy.saved
@@ -319,8 +321,10 @@ export default function AdminPage() {
   }
 
   async function addProduct() {
-    const product = blankProduct();
+    const product = normalizeProduct(blankProduct());
     const nextProducts = [product, ...products];
+    setQuery("");
+    setNewProductId(product.id);
     persistProducts(nextProducts);
     await persistProduct(product);
   }
@@ -632,6 +636,7 @@ export default function AdminPage() {
             <AdminProductCard
               key={product.id}
               categories={categories}
+              highlighted={product.id === newProductId}
               locale={locale}
               product={product}
               onDeleteProduct={deleteProduct}
@@ -651,6 +656,7 @@ export default function AdminPage() {
 
 function AdminProductCard({
   categories,
+  highlighted,
   locale,
   product,
   onDeleteProduct,
@@ -658,6 +664,7 @@ function AdminProductCard({
   onUpdateProduct
 }: {
   categories: MenuCategory[];
+  highlighted?: boolean;
   locale: Locale;
   product: Product;
   onDeleteProduct: (id: string) => void;
@@ -678,7 +685,12 @@ function AdminProductCard({
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: luxuryEase }}
-      className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.045] shadow-[0_24px_90px_rgba(0,0,0,0.32)]"
+      className={[
+        "overflow-hidden rounded-[1.75rem] border bg-white/[0.045] shadow-[0_24px_90px_rgba(0,0,0,0.32)] transition",
+        highlighted
+          ? "border-[#8A7665]/70 shadow-[0_26px_95px_rgba(138,118,101,0.18)]"
+          : "border-white/10"
+      ].join(" ")}
     >
       <div className="grid gap-4 p-4 lg:grid-cols-[15rem_1fr]">
         <div className="grid gap-3">
@@ -718,18 +730,7 @@ function AdminProductCard({
         </div>
 
         <div className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-[1fr_9rem_12rem]">
-            <Field label={copy.name}>
-              <input
-                value={product.name[locale]}
-                onChange={(event) =>
-                  onUpdateProduct(product.id, {
-                    name: { ...product.name, [locale]: event.target.value }
-                  })
-                }
-                className="goia-admin-input"
-              />
-            </Field>
+          <div className="grid gap-3 sm:grid-cols-[9rem_1fr] lg:grid-cols-[9rem_12rem]">
             <Field label={copy.price}>
               <input
                 type="number"
@@ -759,34 +760,46 @@ function AdminProductCard({
             </Field>
           </div>
 
-          <Field label={copy.description}>
-            <textarea
-              value={product.description[locale]}
-              onChange={(event) =>
-                onUpdateProduct(product.id, {
-                  description: { ...product.description, [locale]: event.target.value }
-                })
-              }
-              className="goia-admin-input min-h-28 resize-y py-3 leading-6"
-            />
-          </Field>
+          <LocaleTextFields
+            label={copy.name}
+            values={product.name}
+            onChange={(language, value) =>
+              onUpdateProduct(product.id, {
+                name: { ...product.name, [language]: value }
+              })
+            }
+          />
 
-          <Field label={copy.ingredients}>
-            <textarea
-              value={product.ingredients?.[locale] || ""}
-              onChange={(event) =>
-                onUpdateProduct(product.id, {
-                  ingredients: {
-                    fr: product.ingredients?.fr || "",
-                    de: product.ingredients?.de || "",
-                    en: product.ingredients?.en || "",
-                    [locale]: event.target.value
-                  }
-                })
-              }
-              className="goia-admin-input min-h-20 resize-y py-3 leading-6"
-            />
-          </Field>
+          <LocaleTextAreas
+            label={copy.description}
+            minHeightClassName="min-h-28"
+            values={product.description}
+            onChange={(language, value) =>
+              onUpdateProduct(product.id, {
+                description: { ...product.description, [language]: value }
+              })
+            }
+          />
+
+          <LocaleTextAreas
+            label={copy.ingredients}
+            minHeightClassName="min-h-20"
+            values={{
+              fr: product.ingredients?.fr || "",
+              de: product.ingredients?.de || "",
+              en: product.ingredients?.en || ""
+            }}
+            onChange={(language, value) =>
+              onUpdateProduct(product.id, {
+                ingredients: {
+                  fr: product.ingredients?.fr || "",
+                  de: product.ingredients?.de || "",
+                  en: product.ingredients?.en || "",
+                  [language]: value
+                }
+              })
+            }
+          />
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-2">
@@ -919,6 +932,65 @@ function LanguageSwitch({
           {language.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+function LocaleTextFields({
+  label,
+  values,
+  onChange
+}: {
+  label: string;
+  values: Product["name"];
+  onChange: (locale: Locale, value: string) => void;
+}) {
+  return (
+    <div className="grid gap-2">
+      <p className="text-xs uppercase tracking-[0.18em] text-white/42">{label}</p>
+      <div className="grid gap-3 md:grid-cols-3">
+        {(["fr", "de", "en"] as Locale[]).map((language) => (
+          <Field key={language} label={language.toUpperCase()}>
+            <input
+              value={values[language]}
+              onChange={(event) => onChange(language, event.target.value)}
+              className="goia-admin-input"
+            />
+          </Field>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LocaleTextAreas({
+  label,
+  values,
+  minHeightClassName,
+  onChange
+}: {
+  label: string;
+  values: Product["description"];
+  minHeightClassName: string;
+  onChange: (locale: Locale, value: string) => void;
+}) {
+  return (
+    <div className="grid gap-2">
+      <p className="text-xs uppercase tracking-[0.18em] text-white/42">{label}</p>
+      <div className="grid gap-3 lg:grid-cols-3">
+        {(["fr", "de", "en"] as Locale[]).map((language) => (
+          <Field key={language} label={language.toUpperCase()}>
+            <textarea
+              value={values[language]}
+              onChange={(event) => onChange(language, event.target.value)}
+              className={[
+                "goia-admin-input resize-y py-3 leading-6",
+                minHeightClassName
+              ].join(" ")}
+            />
+          </Field>
+        ))}
+      </div>
     </div>
   );
 }

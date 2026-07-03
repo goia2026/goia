@@ -45,17 +45,17 @@ export async function POST(request: Request) {
 
   if (!supabaseAdmin) {
     console.info("[GOIA admin] Supabase env", supabaseDiagnostic());
-    return NextResponse.json(supabaseDiagnostic());
+    return NextResponse.json(supabaseDiagnostic(), { status: 500 });
   }
 
   const product = (await request.json()) as Product;
   const { error } = await supabaseAdmin.from("products").upsert(product);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ...supabaseDiagnostic(), error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ configured: true, ok: true });
+  return NextResponse.json({ ...supabaseDiagnostic(), ok: true });
 }
 
 export async function DELETE(request: Request) {
@@ -65,7 +65,7 @@ export async function DELETE(request: Request) {
 
   if (!supabaseAdmin) {
     console.info("[GOIA admin] Supabase env", supabaseDiagnostic());
-    return NextResponse.json(supabaseDiagnostic());
+    return NextResponse.json(supabaseDiagnostic(), { status: 500 });
   }
 
   const { id } = (await request.json()) as { id?: string };
@@ -76,8 +76,8 @@ export async function DELETE(request: Request) {
   const { error } = await supabaseAdmin.from("products").delete().eq("id", id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ...supabaseDiagnostic(), error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ configured: true, ok: true });
+  return NextResponse.json({ ...supabaseDiagnostic(), ok: true });
 }

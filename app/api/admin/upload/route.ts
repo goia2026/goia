@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
 import { verifyAdminRequest } from "@/lib/admin-auth";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import {
+  isSupabaseAdminConfigured,
+  missingSupabaseAdminEnv,
+  supabaseAdmin,
+  supabaseAdminEnvStatus
+} from "@/lib/supabase-admin";
+
+function supabaseDiagnostic() {
+  return {
+    configured: isSupabaseAdminConfigured,
+    env: supabaseAdminEnvStatus,
+    missing: missingSupabaseAdminEnv
+  };
+}
 
 export async function POST(request: Request) {
   if (!(await verifyAdminRequest(request))) {
@@ -8,7 +21,8 @@ export async function POST(request: Request) {
   }
 
   if (!supabaseAdmin) {
-    return NextResponse.json({ configured: false });
+    console.info("[GOIA admin] Supabase env", supabaseDiagnostic());
+    return NextResponse.json(supabaseDiagnostic(), { status: 500 });
   }
 
   const formData = await request.formData();
@@ -27,13 +41,13 @@ export async function POST(request: Request) {
   });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ...supabaseDiagnostic(), error: error.message }, { status: 500 });
   }
 
   const { data } = supabaseAdmin.storage.from("product_images").getPublicUrl(path);
 
   return NextResponse.json({
-    configured: true,
+    ...supabaseDiagnostic(),
     publicUrl: data.publicUrl
   });
 }

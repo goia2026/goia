@@ -48,15 +48,15 @@ export async function POST(request: Request) {
 
   if (!supabaseAdmin) {
     console.info("[GOIA admin] Supabase env", supabaseDiagnostic());
-    return NextResponse.json(supabaseDiagnostic());
+    return NextResponse.json(supabaseDiagnostic(), { status: 500 });
   }
 
   const category = (await request.json()) as MenuCategory;
   const { error } = await supabaseAdmin.from("categories").upsert(category);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ...supabaseDiagnostic(), error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ configured: true, ok: true });
+  return NextResponse.json({ ...supabaseDiagnostic(), ok: true });
 }

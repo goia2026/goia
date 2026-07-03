@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
   if (!supabaseAdmin) {
     console.info("[GOIA admin] Supabase env", supabaseDiagnostic());
-    return NextResponse.json(supabaseDiagnostic());
+    return NextResponse.json(supabaseDiagnostic(), { status: 500 });
   }
   const admin = supabaseAdmin;
 
@@ -32,13 +32,13 @@ export async function POST(request: Request) {
     .upsert(initialCategories);
 
   if (categoryError) {
-    return NextResponse.json({ error: categoryError.message }, { status: 500 });
+    return NextResponse.json({ ...supabaseDiagnostic(), error: categoryError.message }, { status: 500 });
   }
 
   const { error: productError } = await admin.from("products").upsert(initialProducts);
 
   if (productError) {
-    return NextResponse.json({ error: productError.message }, { status: 500 });
+    return NextResponse.json({ ...supabaseDiagnostic(), error: productError.message }, { status: 500 });
   }
 
   const currentCategoryIds = new Set<string>(initialCategories.map((category) => category.id));
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     .select("id");
 
   if (storedCategoryError) {
-    return NextResponse.json({ error: storedCategoryError.message }, { status: 500 });
+    return NextResponse.json({ ...supabaseDiagnostic(), error: storedCategoryError.message }, { status: 500 });
   }
 
   const { data: storedProducts, error: storedProductError } = await admin
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     .select("id");
 
   if (storedProductError) {
-    return NextResponse.json({ error: storedProductError.message }, { status: 500 });
+    return NextResponse.json({ ...supabaseDiagnostic(), error: storedProductError.message }, { status: 500 });
   }
 
   const staleCategoryIds = (storedCategories || [])
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
   );
   const productDeleteError = productDeleteResults.find((result) => result.error)?.error;
   if (productDeleteError) {
-    return NextResponse.json({ error: productDeleteError.message }, { status: 500 });
+    return NextResponse.json({ ...supabaseDiagnostic(), error: productDeleteError.message }, { status: 500 });
   }
 
   const categoryDeleteResults = await Promise.all(
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
   );
   const categoryDeleteError = categoryDeleteResults.find((result) => result.error)?.error;
   if (categoryDeleteError) {
-    return NextResponse.json({ error: categoryDeleteError.message }, { status: 500 });
+    return NextResponse.json({ ...supabaseDiagnostic(), error: categoryDeleteError.message }, { status: 500 });
   }
 
   return NextResponse.json({

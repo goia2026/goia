@@ -146,6 +146,11 @@ type SupabaseDiagnostic = {
   missing?: string[];
 };
 
+type AdminApiResponse = SupabaseDiagnostic & {
+  error?: string;
+  publicUrl?: string;
+};
+
 function blankProduct(): Product {
   return {
     id: `goia-${Date.now()}`,
@@ -273,10 +278,28 @@ export default function AdminPage() {
   async function persistProduct(product: Product) {
     if (!onlineStorage) return;
     setStatus("saving");
-    await fetch("/api/admin/products", {
+    const response = await fetch("/api/admin/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(product)
+    });
+    const data = (await response.json().catch(() => ({}))) as AdminApiResponse;
+    setSupabaseDiagnostic({
+      configured: data.configured,
+      env: data.env,
+      missing: data.missing
+    });
+    if (!response.ok || data.error) {
+      setSyncMessage({
+        type: "error",
+        text: data.error || copy.syncError
+      });
+      setStatus("saved");
+      return;
+    }
+    setSyncMessage({
+      type: "success",
+      text: copy.saved
     });
     setStatus("saved");
   }
@@ -308,10 +331,28 @@ export default function AdminPage() {
 
     if (onlineStorage) {
       setStatus("saving");
-      await fetch("/api/admin/products", {
+      const response = await fetch("/api/admin/products", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id })
+      });
+      const data = (await response.json().catch(() => ({}))) as AdminApiResponse;
+      setSupabaseDiagnostic({
+        configured: data.configured,
+        env: data.env,
+        missing: data.missing
+      });
+      if (!response.ok || data.error) {
+        setSyncMessage({
+          type: "error",
+          text: data.error || copy.syncError
+        });
+        setStatus("saved");
+        return;
+      }
+      setSyncMessage({
+        type: "success",
+        text: copy.saved
       });
       setStatus("saved");
     }
@@ -323,7 +364,7 @@ export default function AdminPage() {
 
     if (onlineStorage) {
       setStatus("saving");
-      await Promise.all(
+      const responses = await Promise.all(
         reset.map((product) =>
           fetch("/api/admin/products", {
             method: "POST",
@@ -332,6 +373,20 @@ export default function AdminPage() {
           })
         )
       );
+      const failedResponse = responses.find((response) => !response.ok);
+      if (failedResponse) {
+        const data = (await failedResponse.json().catch(() => ({}))) as AdminApiResponse;
+        setSyncMessage({
+          type: "error",
+          text: data.error || copy.syncError
+        });
+        setStatus("saved");
+        return;
+      }
+      setSyncMessage({
+        type: "success",
+        text: copy.saved
+      });
       setStatus("saved");
     }
   }
@@ -397,10 +452,28 @@ export default function AdminPage() {
     if (!updatedCategory || !onlineStorage) return;
 
     setStatus("saving");
-    await fetch("/api/admin/categories", {
+    const response = await fetch("/api/admin/categories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updatedCategory)
+    });
+    const data = (await response.json().catch(() => ({}))) as AdminApiResponse;
+    setSupabaseDiagnostic({
+      configured: data.configured,
+      env: data.env,
+      missing: data.missing
+    });
+    if (!response.ok || data.error) {
+      setSyncMessage({
+        type: "error",
+        text: data.error || copy.syncError
+      });
+      setStatus("saved");
+      return;
+    }
+    setSyncMessage({
+      type: "success",
+      text: copy.saved
     });
     setStatus("saved");
   }
@@ -416,7 +489,21 @@ export default function AdminPage() {
       method: "POST",
       body: formData
     });
-    const data = (await response.json().catch(() => ({}))) as { publicUrl?: string };
+    const data = (await response.json().catch(() => ({}))) as AdminApiResponse;
+    setSupabaseDiagnostic({
+      configured: data.configured,
+      env: data.env,
+      missing: data.missing
+    });
+
+    if (!response.ok || data.error) {
+      setSyncMessage({
+        type: "error",
+        text: data.error || copy.syncError
+      });
+      setStatus("saved");
+      return;
+    }
 
     if (data.publicUrl) {
       await updateProduct(product.id, { image: data.publicUrl });

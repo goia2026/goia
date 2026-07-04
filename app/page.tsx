@@ -11,6 +11,7 @@ import {
   Search,
   Sparkles,
   Star,
+  ThumbsUp,
   X
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -36,6 +37,11 @@ import { supabase } from "@/lib/supabase";
 
 type View = "home" | "menu" | "favorites";
 type CategoryLabels = typeof categoryLabels;
+type ProductVote = {
+  product_id: string;
+  count: number;
+  week_start: string;
+};
 type AppCopy = {
   followTitle: string;
   followSubtitle: string;
@@ -88,6 +94,11 @@ type AppCopy = {
   premium: string;
   classic: string;
   allFlavors: string;
+  weeklyTopTitle: string;
+  weeklyTopText: string;
+  vote: string;
+  voted: string;
+  votes: string;
 };
 
 const reviewUrl =
@@ -113,6 +124,24 @@ const fractionalCurrency = new Intl.NumberFormat("fr-FR", {
 const luxuryEase = [0.16, 1, 0.3, 1] as const;
 const storageVersion = "goia-luxury-v14";
 const localeStorageKey = "goia:locale";
+const nonVotableCategories: Category[] = ["softs-juices", "hot-drinks", "spiritueux"];
+
+function getWeekStart(date = new Date()) {
+  const nextDate = new Date(date);
+  const day = nextDate.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  nextDate.setDate(nextDate.getDate() + diff);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate.toISOString().slice(0, 10);
+}
+
+function voteStorageKey(weekStart: string) {
+  return `goia:votes:${weekStart}`;
+}
+
+function isProductVotable(product: Product) {
+  return product.available !== false && !nonVotableCategories.includes(product.category);
+}
 
 const appCopy: Record<Locale, AppCopy> = {
   fr: {
@@ -168,7 +197,12 @@ const appCopy: Record<Locale, AppCopy> = {
     bestSeller: "Best Seller",
     premium: "Premium",
     classic: "Classique",
-    allFlavors: "Disponible avec tous nos goûts."
+    allFlavors: "Disponible avec tous nos goûts.",
+    weeklyTopTitle: "Top 3 de la semaine au GOIA",
+    weeklyTopText: "Les choix préférés de nos clients cette semaine.",
+    vote: "Voter",
+    voted: "Voté",
+    votes: "votes"
   },
   de: {
     followTitle: "GOIA auf Instagram folgen",
@@ -223,7 +257,12 @@ const appCopy: Record<Locale, AppCopy> = {
     bestSeller: "Best Seller",
     premium: "Premium",
     classic: "Klassisch",
-    allFlavors: "Mit allen unseren Sorten verfügbar."
+    allFlavors: "Mit allen unseren Sorten verfügbar.",
+    weeklyTopTitle: "GOIA Top 3 der Woche",
+    weeklyTopText: "Die Lieblingsauswahl unserer Gäste in dieser Woche.",
+    vote: "Abstimmen",
+    voted: "Abgestimmt",
+    votes: "Stimmen"
   },
   en: {
     followTitle: "Follow GOIA on Instagram",
@@ -278,7 +317,12 @@ const appCopy: Record<Locale, AppCopy> = {
     bestSeller: "Best Seller",
     premium: "Premium",
     classic: "Classic",
-    allFlavors: "Available with all our flavors."
+    allFlavors: "Available with all our flavors.",
+    weeklyTopTitle: "GOIA Top 3 of the Week",
+    weeklyTopText: "Our guests’ favorite picks this week.",
+    vote: "Vote",
+    voted: "Voted",
+    votes: "votes"
   }
 };
 
@@ -361,8 +405,11 @@ export default function HomePage() {
   );
   const [labels, setLabels] = useState<CategoryLabels>(categoryLabels);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [votedProductIds, setVotedProductIds] = useState<string[]>([]);
+  const [votes, setVotes] = useState<ProductVote[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const t = uiCopy[locale];
+  const currentWeekStart = useMemo(() => getWeekStart(), []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setLoading(false), 950);
@@ -376,6 +423,7 @@ export default function HomePage() {
     }
 
     setFavorites(readJson<string[]>("goia:favorites", []));
+    setVotedProductIds(readJson<string[]>(voteStorageKey(getWeekStart()), []));
   }, []);
 
   useEffect(() => {
@@ -389,8 +437,13 @@ export default function HomePage() {
     Promise.all([
       supabaseClient.from("products").select("*"),
       supabaseClient.from("categories").select("*").order("position", { ascending: true }),
-      supabaseClient.from("chicha_flavors").select("*").order("position", { ascending: true })
-    ]).then(([productsResult, categoriesResult, flavorsResult]) => {
+      supabaseClient.from("chicha_flavors").select("*").order("position", { ascending: true }),
+      supabaseClient
+        .from("product_votes")
+        .select("product_id,count,week_start")
+        .eq("week_start", getWeekStart())
+        .order("count", { ascending: false })
+    ]).then(([productsResult, categoriesResult, flavorsResult, votesResult]) => {
       if (productsResult.data) {
         setProducts((productsResult.data as Product[]).map(normalizeProduct));
       }
@@ -408,6 +461,10 @@ export default function HomePage() {
 
       if (flavorsResult.data) {
         setChichaFlavors((flavorsResult.data as ChichaFlavor[]).map(normalizeChichaFlavor));
+      }
+
+      if (votesResult.data) {
+        setVotes(votesResult.data as ProductVote[]);
       }
     });
 
@@ -447,6 +504,16 @@ export default function HomePage() {
           .then(({ data }) => {
             if (data) setChichaFlavors((data as ChichaFlavor[]).map(normalizeChichaFlavor));
           });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "product_votes" }, () => {
+        supabaseClient
+          .from("product_votes")
+          .select("product_id,count,week_start")
+          .eq("week_start", getWeekStart())
+          .order("count", { ascending: false })
+          .then(({ data }) => {
+            if (data) setVotes(data as ProductVote[]);
+          });
       });
     channel.subscribe();
 
@@ -458,6 +525,10 @@ export default function HomePage() {
   useEffect(() => {
     writeJson("goia:favorites", favorites);
   }, [favorites]);
+
+  useEffect(() => {
+    writeJson(voteStorageKey(currentWeekStart), votedProductIds);
+  }, [currentWeekStart, votedProductIds]);
 
   const filteredProducts = useMemo(() => {
     const source = products;
@@ -482,6 +553,31 @@ export default function HomePage() {
     });
   }, [category, favorites, labels, locale, products, query, view]);
 
+  const voteCounts = useMemo(
+    () =>
+      votes.reduce<Record<string, number>>((nextVotes, vote) => {
+        nextVotes[vote.product_id] = vote.count;
+        return nextVotes;
+      }, {}),
+    [votes]
+  );
+
+  const weeklyTopProducts = useMemo(
+    () =>
+      votes
+        .map((vote) => ({
+          vote,
+          product: products.find((product) => product.id === vote.product_id)
+        }))
+        .filter(
+          (item): item is { vote: ProductVote; product: Product } =>
+            Boolean(item.product) && isProductVotable(item.product as Product)
+        )
+        .sort((a, b) => b.vote.count - a.vote.count)
+        .slice(0, 3),
+    [products, votes]
+  );
+
   function enterLounge() {
     setEntered(true);
     setView("menu");
@@ -492,6 +588,54 @@ export default function HomePage() {
     setFavorites((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
     );
+  }
+
+  async function voteForProduct(product: Product) {
+    if (!isProductVotable(product) || votedProductIds.includes(product.id)) return;
+
+    setVotedProductIds((current) => [...current, product.id]);
+    setVotes((currentVotes) => {
+      const existingVote = currentVotes.find((vote) => vote.product_id === product.id);
+      if (existingVote) {
+        return currentVotes.map((vote) =>
+          vote.product_id === product.id ? { ...vote, count: vote.count + 1 } : vote
+        );
+      }
+      return [
+        ...currentVotes,
+        { product_id: product.id, count: 1, week_start: currentWeekStart }
+      ];
+    });
+
+    const response = await fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productId: product.id })
+    });
+
+    if (!response.ok) {
+      setVotedProductIds((current) => current.filter((id) => id !== product.id));
+      setVotes((currentVotes) =>
+        currentVotes
+          .map((vote) =>
+            vote.product_id === product.id
+              ? { ...vote, count: Math.max(0, vote.count - 1) }
+              : vote
+          )
+          .filter((vote) => vote.count > 0)
+      );
+      return;
+    }
+
+    const data = (await response.json().catch(() => null)) as
+      | { vote?: ProductVote }
+      | null;
+    if (data?.vote) {
+      setVotes((currentVotes) => {
+        const withoutVote = currentVotes.filter((vote) => vote.product_id !== product.id);
+        return [...withoutVote, data.vote as ProductVote];
+      });
+    }
   }
 
   return (
@@ -519,6 +663,11 @@ export default function HomePage() {
 
             <section className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 pb-10 pt-28 sm:px-6 lg:gap-7 lg:px-8">
               <SearchBar value={query} locale={locale} onChange={setQuery} />
+              <WeeklyTop
+                items={weeklyTopProducts}
+                labels={labels}
+                locale={locale}
+              />
 
               <CategoryCards
                 category={category}
@@ -535,9 +684,12 @@ export default function HomePage() {
                 labels={labels}
                 favorites={favorites}
                 chichaFlavors={chichaFlavors}
+                votedProductIds={votedProductIds}
+                voteCounts={voteCounts}
                 emptyText={t.empty}
                 onOpen={setSelectedProduct}
                 onToggleFavorite={toggleFavorite}
+                onVote={voteForProduct}
               />
               <InstagramPanel locale={locale} />
             </section>
@@ -1078,6 +1230,83 @@ function CategoryCards({
   );
 }
 
+function WeeklyTop({
+  items,
+  labels,
+  locale
+}: {
+  items: Array<{ vote: ProductVote; product: Product }>;
+  labels: CategoryLabels;
+  locale: Locale;
+}) {
+  const c = appCopy[locale];
+  const medals = ["#1", "#2", "#3"];
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 18, filter: "blur(8px)" }}
+      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+      transition={{ duration: 0.55, ease: luxuryEase }}
+      className="relative overflow-hidden rounded-[2rem] border border-[#C8A45B]/22 bg-black/64 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:p-6"
+    >
+      <div className="pointer-events-none absolute -right-20 -top-24 h-60 w-60 rounded-full bg-[#C8A45B]/14 blur-3xl" />
+      <div className="relative flex flex-col gap-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.28em] text-[#C8A45B]">GOIA Community</p>
+            <h2 className="mt-2 text-2xl font-semibold leading-tight text-white sm:text-4xl">
+              {c.weeklyTopTitle}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-white/55">{c.weeklyTopText}</p>
+          </div>
+          <span className="hidden h-12 w-12 shrink-0 place-items-center rounded-full border border-[#C8A45B]/35 bg-[#C8A45B]/12 text-[#F2D991] shadow-[0_0_34px_rgba(200,164,91,0.16)] sm:grid">
+            <Star size={20} />
+          </span>
+        </div>
+
+        {items.length ? (
+          <div className="grid gap-3 lg:grid-cols-3">
+            {items.map(({ product, vote }, index) => (
+              <motion.article
+                key={product.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.06, duration: 0.4, ease: luxuryEase }}
+                className={[
+                  "relative overflow-hidden rounded-[1.45rem] border bg-white/[0.045] p-4 shadow-[0_18px_70px_rgba(0,0,0,0.34)]",
+                  index === 0 ? "border-[#C8A45B]/52" : "border-[#C8A45B]/18"
+                ].join(" ")}
+              >
+                <div className="absolute -right-10 -top-12 h-28 w-28 rounded-full bg-[#C8A45B]/12 blur-2xl" />
+                <div className="relative flex items-center gap-4">
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[#C8A45B]/45 bg-[#C8A45B]/16 text-sm font-semibold text-[#F2D991]">
+                    {medals[index]}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs uppercase tracking-[0.2em] text-[#C8A45B]">
+                      {labels[product.category][locale]}
+                    </p>
+                    <h3 className="mt-1 truncate text-lg font-semibold text-white">
+                      {product.name[locale]}
+                    </h3>
+                    <p className="mt-1 text-sm text-white/54">
+                      {vote.count} {c.votes}
+                    </p>
+                  </div>
+                </div>
+              </motion.article>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-[1.45rem] border border-[#C8A45B]/16 bg-black/28 p-5 text-sm leading-6 text-white/50">
+            {c.weeklyTopText}
+          </div>
+        )}
+      </div>
+    </motion.section>
+  );
+}
+
 function CategoryCard({
   active,
   count,
@@ -1132,9 +1361,12 @@ function ProductGrid({
   labels,
   favorites,
   chichaFlavors,
+  votedProductIds,
+  voteCounts,
   emptyText,
   onOpen,
-  onToggleFavorite
+  onToggleFavorite,
+  onVote
 }: {
   products: Product[];
   activeCategory: Category | null;
@@ -1142,9 +1374,12 @@ function ProductGrid({
   labels: CategoryLabels;
   favorites: string[];
   chichaFlavors: ChichaFlavor[];
+  votedProductIds: string[];
+  voteCounts: Record<string, number>;
   emptyText: string;
   onOpen: (product: Product) => void;
   onToggleFavorite: (id: string) => void;
+  onVote: (product: Product) => void;
 }) {
   const c = appCopy[locale];
   const [openChichaId, setOpenChichaId] = useState<string | null>(null);
@@ -1245,6 +1480,9 @@ function ProductGrid({
             const isChichaProduct = product.category === "chichas";
             const isChichaOpen = openChichaId === product.id;
             const isUnavailable = product.available === false;
+            const isVotable = isProductVotable(product);
+            const hasVoted = votedProductIds.includes(product.id);
+            const voteCount = voteCounts[product.id] || 0;
 
             return (
             <motion.div
@@ -1387,6 +1625,29 @@ function ProductGrid({
                       {product.ingredients[locale]}
                     </p>
                   </div>
+                )}
+                {isVotable && (
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (hasVoted) return;
+                      onVote(product);
+                    }}
+                    disabled={hasVoted}
+                    className={[
+                      "mt-auto inline-flex h-12 items-center justify-center gap-2 rounded-full border px-4 text-sm font-semibold transition",
+                      hasVoted
+                        ? "cursor-not-allowed border-[#C8A45B]/35 bg-[#C8A45B]/12 text-[#F2D991]"
+                        : "border-[#C8A45B]/32 bg-black/32 text-white/78 hover:border-[#C8A45B]/60 hover:bg-[#C8A45B]/14 hover:text-white"
+                    ].join(" ")}
+                    aria-label={hasVoted ? c.voted : c.vote}
+                  >
+                    <ThumbsUp size={16} fill={hasVoted ? "currentColor" : "none"} />
+                    {hasVoted ? c.voted : c.vote}
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/72">
+                      {voteCount}
+                    </span>
+                  </button>
                 )}
               </div>
             </motion.article>

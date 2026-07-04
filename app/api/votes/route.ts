@@ -18,31 +18,52 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase is not configured." }, { status: 500 });
   }
 
-  const { productId } = (await request.json().catch(() => ({}))) as {
+  const { productId, targetId, targetType } = (await request.json().catch(() => ({}))) as {
     productId?: string;
+    targetId?: string;
+    targetType?: "product" | "flavor";
   };
+  const voteTargetType = targetType === "flavor" ? "flavor" : "product";
+  const voteTargetId = targetId || productId;
 
-  if (!productId) {
-    return NextResponse.json({ error: "Missing product id." }, { status: 400 });
+  if (!voteTargetId) {
+    return NextResponse.json({ error: "Missing vote target id." }, { status: 400 });
   }
 
-  const { data: product, error: productError } = await supabaseAdmin
-    .from("products")
-    .select("id,category,available")
-    .eq("id", productId)
-    .single();
+  if (voteTargetType === "product") {
+    const { data: product, error: productError } = await supabaseAdmin
+      .from("products")
+      .select("id,category,available")
+      .eq("id", voteTargetId)
+      .single();
 
-  if (productError || !product) {
-    return NextResponse.json({ error: "Product not found." }, { status: 404 });
-  }
+    if (productError || !product) {
+      return NextResponse.json({ error: "Product not found." }, { status: 404 });
+    }
 
-  if (product.available === false || nonVotableCategories.includes(product.category as Category)) {
-    return NextResponse.json({ error: "Product is not votable." }, { status: 400 });
+    if (product.available === false || nonVotableCategories.includes(product.category as Category)) {
+      return NextResponse.json({ error: "Product is not votable." }, { status: 400 });
+    }
+  } else {
+    const { data: flavor, error: flavorError } = await supabaseAdmin
+      .from("chicha_flavors")
+      .select("id,available")
+      .eq("id", voteTargetId)
+      .single();
+
+    if (flavorError || !flavor) {
+      return NextResponse.json({ error: "Flavor not found." }, { status: 404 });
+    }
+
+    if (flavor.available === false) {
+      return NextResponse.json({ error: "Flavor is not votable." }, { status: 400 });
+    }
   }
 
   const weekStart = getWeekStart();
   const { data: vote, error: voteError } = await supabaseAdmin.rpc("increment_product_vote", {
-    vote_product_id: productId,
+    vote_target_type: voteTargetType,
+    vote_target_id: voteTargetId,
     vote_week_start: weekStart
   });
 
@@ -55,7 +76,9 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     vote: {
-      product_id: row?.product_id || productId,
+      product_id: row?.product_id || (voteTargetType === "product" ? voteTargetId : undefined),
+      target_type: row?.target_type || voteTargetType,
+      target_id: row?.target_id || voteTargetId,
       count: row?.count || 1,
       week_start: row?.week_start || weekStart
     }

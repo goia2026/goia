@@ -38,10 +38,15 @@ import { supabase } from "@/lib/supabase";
 type View = "home" | "menu" | "favorites";
 type CategoryLabels = typeof categoryLabels;
 type ProductVote = {
-  product_id: string;
+  product_id?: string;
+  target_type: "product" | "flavor";
+  target_id: string;
   count: number;
   week_start: string;
 };
+type WeeklyTopItem =
+  | { kind: "product"; vote: ProductVote; product: Product }
+  | { kind: "flavor"; vote: ProductVote; flavor: ChichaFlavor };
 type AppCopy = {
   followTitle: string;
   followSubtitle: string;
@@ -99,6 +104,8 @@ type AppCopy = {
   vote: string;
   voted: string;
   votes: string;
+  productTopLabel: string;
+  flavorTopLabel: string;
 };
 
 const reviewUrl =
@@ -139,8 +146,27 @@ function voteStorageKey(weekStart: string) {
   return `goia:votes:${weekStart}`;
 }
 
+function voteTargetKey(type: ProductVote["target_type"], id: string) {
+  return `${type}:${id}`;
+}
+
+function normalizeVote(vote: Partial<ProductVote>): ProductVote {
+  const targetType = vote.target_type === "flavor" ? "flavor" : "product";
+  return {
+    product_id: vote.product_id,
+    target_type: targetType,
+    target_id: vote.target_id || vote.product_id || "",
+    count: Number.isFinite(Number(vote.count)) ? Number(vote.count) : 0,
+    week_start: vote.week_start || getWeekStart()
+  };
+}
+
 function isProductVotable(product: Product) {
   return product.available !== false && !nonVotableCategories.includes(product.category);
+}
+
+function isFlavorVotable(flavor: ChichaFlavor) {
+  return flavor.available !== false;
 }
 
 const appCopy: Record<Locale, AppCopy> = {
@@ -202,7 +228,9 @@ const appCopy: Record<Locale, AppCopy> = {
     weeklyTopText: "Les choix préférés de nos clients cette semaine.",
     vote: "Voter",
     voted: "Voté",
-    votes: "votes"
+    votes: "votes",
+    productTopLabel: "Produit",
+    flavorTopLabel: "Goût de chicha"
   },
   de: {
     followTitle: "GOIA auf Instagram folgen",
@@ -262,7 +290,9 @@ const appCopy: Record<Locale, AppCopy> = {
     weeklyTopText: "Die Lieblingsauswahl unserer Gäste in dieser Woche.",
     vote: "Abstimmen",
     voted: "Abgestimmt",
-    votes: "Stimmen"
+    votes: "Stimmen",
+    productTopLabel: "Produkt",
+    flavorTopLabel: "Shisha-Sorte"
   },
   en: {
     followTitle: "Follow GOIA on Instagram",
@@ -322,7 +352,9 @@ const appCopy: Record<Locale, AppCopy> = {
     weeklyTopText: "Our guests’ favorite picks this week.",
     vote: "Vote",
     voted: "Voted",
-    votes: "votes"
+    votes: "votes",
+    productTopLabel: "Product",
+    flavorTopLabel: "Hookah flavor"
   }
 };
 
@@ -440,7 +472,7 @@ export default function HomePage() {
       supabaseClient.from("chicha_flavors").select("*").order("position", { ascending: true }),
       supabaseClient
         .from("product_votes")
-        .select("product_id,count,week_start")
+        .select("product_id,target_type,target_id,count,week_start")
         .eq("week_start", getWeekStart())
         .order("count", { ascending: false })
     ]).then(([productsResult, categoriesResult, flavorsResult, votesResult]) => {
@@ -464,7 +496,7 @@ export default function HomePage() {
       }
 
       if (votesResult.data) {
-        setVotes(votesResult.data as ProductVote[]);
+        setVotes((votesResult.data as Partial<ProductVote>[]).map(normalizeVote));
       }
     });
 
@@ -508,11 +540,11 @@ export default function HomePage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "product_votes" }, () => {
         supabaseClient
           .from("product_votes")
-          .select("product_id,count,week_start")
+          .select("product_id,target_type,target_id,count,week_start")
           .eq("week_start", getWeekStart())
           .order("count", { ascending: false })
           .then(({ data }) => {
-            if (data) setVotes(data as ProductVote[]);
+            if (data) setVotes((data as Partial<ProductVote>[]).map(normalizeVote));
           });
       });
     channel.subscribe();
@@ -556,26 +588,32 @@ export default function HomePage() {
   const voteCounts = useMemo(
     () =>
       votes.reduce<Record<string, number>>((nextVotes, vote) => {
-        nextVotes[vote.product_id] = vote.count;
+        nextVotes[voteTargetKey(vote.target_type, vote.target_id)] = vote.count;
         return nextVotes;
       }, {}),
     [votes]
   );
 
-  const weeklyTopProducts = useMemo(
+  const weeklyTopItems = useMemo<WeeklyTopItem[]>(
     () =>
       votes
-        .map((vote) => ({
-          vote,
-          product: products.find((product) => product.id === vote.product_id)
-        }))
-        .filter(
-          (item): item is { vote: ProductVote; product: Product } =>
-            Boolean(item.product) && isProductVotable(item.product as Product)
-        )
+        .map((vote) => {
+          if (vote.target_type === "flavor") {
+            const flavor = chichaFlavors.find((item) => item.id === vote.target_id);
+            return flavor && isFlavorVotable(flavor)
+              ? ({ kind: "flavor", vote, flavor } as WeeklyTopItem)
+              : null;
+          }
+
+          const product = products.find((item) => item.id === vote.target_id);
+          return product && isProductVotable(product)
+            ? ({ kind: "product", vote, product } as WeeklyTopItem)
+            : null;
+        })
+        .filter((item): item is WeeklyTopItem => Boolean(item))
         .sort((a, b) => b.vote.count - a.vote.count)
         .slice(0, 3),
-    [products, votes]
+    [chichaFlavors, products, votes]
   );
 
   function enterLounge() {
@@ -590,35 +628,46 @@ export default function HomePage() {
     );
   }
 
-  async function voteForProduct(product: Product) {
-    if (!isProductVotable(product) || votedProductIds.includes(product.id)) return;
+  async function voteForTarget(type: ProductVote["target_type"], id: string) {
+    const targetKey = voteTargetKey(type, id);
+    if (votedProductIds.includes(targetKey)) return;
 
-    setVotedProductIds((current) => [...current, product.id]);
+    setVotedProductIds((current) => [...current, targetKey]);
     setVotes((currentVotes) => {
-      const existingVote = currentVotes.find((vote) => vote.product_id === product.id);
+      const existingVote = currentVotes.find(
+        (vote) => voteTargetKey(vote.target_type, vote.target_id) === targetKey
+      );
       if (existingVote) {
         return currentVotes.map((vote) =>
-          vote.product_id === product.id ? { ...vote, count: vote.count + 1 } : vote
+          voteTargetKey(vote.target_type, vote.target_id) === targetKey
+            ? { ...vote, count: vote.count + 1 }
+            : vote
         );
       }
       return [
         ...currentVotes,
-        { product_id: product.id, count: 1, week_start: currentWeekStart }
+        {
+          product_id: type === "product" ? id : undefined,
+          target_type: type,
+          target_id: id,
+          count: 1,
+          week_start: currentWeekStart
+        }
       ];
     });
 
     const response = await fetch("/api/votes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ productId: product.id })
+      body: JSON.stringify({ targetType: type, targetId: id })
     });
 
     if (!response.ok) {
-      setVotedProductIds((current) => current.filter((id) => id !== product.id));
+      setVotedProductIds((current) => current.filter((item) => item !== targetKey));
       setVotes((currentVotes) =>
         currentVotes
           .map((vote) =>
-            vote.product_id === product.id
+            voteTargetKey(vote.target_type, vote.target_id) === targetKey
               ? { ...vote, count: Math.max(0, vote.count - 1) }
               : vote
           )
@@ -631,11 +680,24 @@ export default function HomePage() {
       | { vote?: ProductVote }
       | null;
     if (data?.vote) {
+      const normalizedVote = normalizeVote(data.vote);
       setVotes((currentVotes) => {
-        const withoutVote = currentVotes.filter((vote) => vote.product_id !== product.id);
-        return [...withoutVote, data.vote as ProductVote];
+        const withoutVote = currentVotes.filter(
+          (vote) => voteTargetKey(vote.target_type, vote.target_id) !== targetKey
+        );
+        return [...withoutVote, normalizedVote];
       });
     }
+  }
+
+  async function voteForProduct(product: Product) {
+    if (!isProductVotable(product)) return;
+    await voteForTarget("product", product.id);
+  }
+
+  async function voteForFlavor(flavor: ChichaFlavor) {
+    if (!isFlavorVotable(flavor)) return;
+    await voteForTarget("flavor", flavor.id);
   }
 
   return (
@@ -664,7 +726,7 @@ export default function HomePage() {
             <section className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 pb-10 pt-28 sm:px-6 lg:gap-7 lg:px-8">
               <SearchBar value={query} locale={locale} onChange={setQuery} />
               <WeeklyTop
-                items={weeklyTopProducts}
+                items={weeklyTopItems}
                 labels={labels}
                 locale={locale}
               />
@@ -689,6 +751,7 @@ export default function HomePage() {
                 emptyText={t.empty}
                 onOpen={setSelectedProduct}
                 onToggleFavorite={toggleFavorite}
+                onVoteFlavor={voteForFlavor}
                 onVote={voteForProduct}
               />
               <InstagramPanel locale={locale} />
@@ -1235,7 +1298,7 @@ function WeeklyTop({
   labels,
   locale
 }: {
-  items: Array<{ vote: ProductVote; product: Product }>;
+  items: WeeklyTopItem[];
   labels: CategoryLabels;
   locale: Locale;
 }) {
@@ -1266,9 +1329,9 @@ function WeeklyTop({
 
         {items.length ? (
           <div className="grid gap-3 lg:grid-cols-3">
-            {items.map(({ product, vote }, index) => (
+            {items.map((item, index) => (
               <motion.article
-                key={product.id}
+                key={`${item.kind}-${item.vote.target_id}`}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.06, duration: 0.4, ease: luxuryEase }}
@@ -1284,13 +1347,17 @@ function WeeklyTop({
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs uppercase tracking-[0.2em] text-[#C8A45B]">
-                      {labels[product.category][locale]}
+                      {item.kind === "product"
+                        ? `${c.productTopLabel} • ${labels[item.product.category][locale]}`
+                        : `${c.flavorTopLabel} • GOIA Chichas`}
                     </p>
                     <h3 className="mt-1 truncate text-lg font-semibold text-white">
-                      {product.name[locale]}
+                      {item.kind === "product"
+                        ? item.product.name[locale]
+                        : item.flavor.name[locale]}
                     </h3>
                     <p className="mt-1 text-sm text-white/54">
-                      {vote.count} {c.votes}
+                      {item.vote.count} {c.votes}
                     </p>
                   </div>
                 </div>
@@ -1366,7 +1433,8 @@ function ProductGrid({
   emptyText,
   onOpen,
   onToggleFavorite,
-  onVote
+  onVote,
+  onVoteFlavor
 }: {
   products: Product[];
   activeCategory: Category | null;
@@ -1380,6 +1448,7 @@ function ProductGrid({
   onOpen: (product: Product) => void;
   onToggleFavorite: (id: string) => void;
   onVote: (product: Product) => void;
+  onVoteFlavor: (flavor: ChichaFlavor) => void;
 }) {
   const c = appCopy[locale];
   const [openChichaId, setOpenChichaId] = useState<string | null>(null);
@@ -1481,8 +1550,9 @@ function ProductGrid({
             const isChichaOpen = openChichaId === product.id;
             const isUnavailable = product.available === false;
             const isVotable = isProductVotable(product);
-            const hasVoted = votedProductIds.includes(product.id);
-            const voteCount = voteCounts[product.id] || 0;
+            const productVoteKey = voteTargetKey("product", product.id);
+            const hasVoted = votedProductIds.includes(productVoteKey);
+            const voteCount = voteCounts[productVoteKey] || 0;
 
             return (
             <motion.div
@@ -1663,7 +1733,14 @@ function ProductGrid({
                   className="overflow-hidden"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <ChichaFlavorPanel flavors={chichaFlavors} locale={locale} compact />
+                  <ChichaFlavorPanel
+                    flavors={chichaFlavors}
+                    locale={locale}
+                    compact
+                    votedTargetIds={votedProductIds}
+                    voteCounts={voteCounts}
+                    onVoteFlavor={onVoteFlavor}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1689,11 +1766,17 @@ function ChichaFlavorSection({
 function ChichaFlavorPanel({
   flavors,
   locale,
-  compact = false
+  compact = false,
+  votedTargetIds = [],
+  voteCounts = {},
+  onVoteFlavor
 }: {
   flavors: ChichaFlavor[];
   locale: Locale;
   compact?: boolean;
+  votedTargetIds?: string[];
+  voteCounts?: Record<string, number>;
+  onVoteFlavor?: (flavor: ChichaFlavor) => void;
 }) {
   const c = appCopy[locale];
   const signatureMixes = flavors.filter((flavor) => flavor.type === "signature");
@@ -1718,6 +1801,12 @@ function ChichaFlavorPanel({
           </h3>
           <div className={compact ? "mt-4 grid gap-2.5" : "mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"}>
             {signatureMixes.map((mix, index) => (
+              (() => {
+                const flavorVoteKey = voteTargetKey("flavor", mix.id);
+                const hasFlavorVoted = votedTargetIds.includes(flavorVoteKey);
+                const flavorVoteCount = voteCounts[flavorVoteKey] || 0;
+
+                return (
               <motion.article
                 key={mix.id}
                 initial={{ opacity: 0, y: 14 }}
@@ -1757,8 +1846,32 @@ function ChichaFlavorPanel({
                     <h4 className={compact ? "text-base font-semibold leading-tight text-white" : "text-xl font-semibold leading-tight text-white"}>{mix.name[locale]}</h4>
                     <p className={compact ? "mt-1.5 text-xs leading-5 text-white/58" : "mt-2 text-sm leading-6 text-white/58"}>{mix.notes[locale]}</p>
                   </div>
+                  {mix.available !== false && onVoteFlavor && (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (hasFlavorVoted) return;
+                        onVoteFlavor(mix);
+                      }}
+                      disabled={hasFlavorVoted}
+                      className={[
+                        "inline-flex h-10 items-center justify-center gap-2 rounded-full border px-3 text-xs font-semibold transition",
+                        hasFlavorVoted
+                          ? "cursor-not-allowed border-[#C8A45B]/35 bg-[#C8A45B]/12 text-[#F2D991]"
+                          : "border-[#C8A45B]/28 bg-black/24 text-white/72 hover:border-[#C8A45B]/55 hover:bg-[#C8A45B]/12 hover:text-white"
+                      ].join(" ")}
+                    >
+                      <ThumbsUp size={14} fill={hasFlavorVoted ? "currentColor" : "none"} />
+                      {hasFlavorVoted ? c.voted : c.vote}
+                      <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.65rem]">
+                        {flavorVoteCount}
+                      </span>
+                    </button>
+                  )}
                 </div>
               </motion.article>
+                );
+              })()
             ))}
           </div>
         </div>
@@ -1780,24 +1893,52 @@ function ChichaFlavorPanel({
             {c.classicFlavors}
           </h3>
           <div className={compact ? "mt-4 flex flex-wrap gap-2" : "mt-5 flex flex-wrap gap-2.5"}>
-            {classicChichaFlavors.map((flavor, index) => (
-              <motion.span
-                key={flavor.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.035, duration: 0.35, ease: luxuryEase }}
-                className={[
-                  "rounded-full border font-medium shadow-[0_0_28px_rgba(200,164,91,0.08)] backdrop-blur-xl",
-                  flavor.available === false
-                    ? "border-white/10 bg-white/[0.04] text-white/38 line-through"
-                    : "border-[#C8A45B]/48 bg-[#C8A45B]/8 text-[#F2D991]",
-                  compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"
-                ].join(" ")}
-              >
-                {flavor.name[locale]}
-                {flavor.available === false ? ` · ${c.soldOut}` : ""}
-              </motion.span>
-            ))}
+            {classicChichaFlavors.map((flavor, index) => {
+              const flavorVoteKey = voteTargetKey("flavor", flavor.id);
+              const hasFlavorVoted = votedTargetIds.includes(flavorVoteKey);
+              const flavorVoteCount = voteCounts[flavorVoteKey] || 0;
+
+              return (
+                <motion.span
+                  key={flavor.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.035, duration: 0.35, ease: luxuryEase }}
+                  className={[
+                    "inline-flex items-center gap-2 rounded-full border font-medium shadow-[0_0_28px_rgba(200,164,91,0.08)] backdrop-blur-xl",
+                    flavor.available === false
+                      ? "border-white/10 bg-white/[0.04] text-white/38 line-through"
+                      : "border-[#C8A45B]/48 bg-[#C8A45B]/8 text-[#F2D991]",
+                    compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"
+                  ].join(" ")}
+                >
+                  <span>
+                    {flavor.name[locale]}
+                    {flavor.available === false ? ` · ${c.soldOut}` : ""}
+                  </span>
+                  {flavor.available !== false && onVoteFlavor && (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (hasFlavorVoted) return;
+                        onVoteFlavor(flavor);
+                      }}
+                      disabled={hasFlavorVoted}
+                      className={[
+                        "inline-flex h-7 items-center gap-1 rounded-full border px-2 text-[0.65rem] transition",
+                        hasFlavorVoted
+                          ? "cursor-not-allowed border-[#C8A45B]/35 bg-[#C8A45B]/12 text-[#F2D991]"
+                          : "border-white/12 bg-black/24 text-white/72 hover:border-[#C8A45B]/45 hover:text-white"
+                      ].join(" ")}
+                    >
+                      <ThumbsUp size={11} fill={hasFlavorVoted ? "currentColor" : "none"} />
+                      {hasFlavorVoted ? c.voted : c.vote}
+                      <span>{flavorVoteCount}</span>
+                    </button>
+                  )}
+                </motion.span>
+              );
+            })}
           </div>
         </div>
       </motion.section>

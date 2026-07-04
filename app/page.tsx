@@ -156,11 +156,17 @@ function voteTargetKey(type: ProductVote["target_type"], id: string) {
 }
 
 function normalizeVote(vote: Partial<ProductVote>): ProductVote {
-  const targetType = vote.target_type === "flavor" ? "flavor" : "product";
+  const rawTargetId = vote.target_id || vote.product_id || "";
+  const targetType =
+    vote.target_type === "flavor" || rawTargetId.startsWith("flavor:")
+      ? "flavor"
+      : "product";
+  const targetId = rawTargetId.replace(/^(product|flavor):/, "");
+
   return {
     product_id: vote.product_id,
     target_type: targetType,
-    target_id: vote.target_id || vote.product_id || "",
+    target_id: targetId,
     count: Number.isFinite(Number(vote.count)) ? Number(vote.count) : 0,
     week_start: vote.week_start || getWeekStart()
   };
@@ -590,18 +596,39 @@ export default function HomePage() {
     });
   }, [category, favorites, labels, locale, products, query, view]);
 
+  const currentWeekVotes = useMemo(
+    () => votes.filter((vote) => vote.week_start === currentWeekStart),
+    [currentWeekStart, votes]
+  );
+
+  const aggregatedVotes = useMemo(
+    () =>
+      currentWeekVotes.reduce<ProductVote[]>((nextVotes, vote) => {
+        const existingVote = nextVotes.find(
+          (item) => item.target_type === vote.target_type && item.target_id === vote.target_id
+        );
+        if (existingVote) {
+          existingVote.count += vote.count;
+        } else {
+          nextVotes.push({ ...vote });
+        }
+        return nextVotes;
+      }, []),
+    [currentWeekVotes]
+  );
+
   const voteCounts = useMemo(
     () =>
-      votes.reduce<Record<string, number>>((nextVotes, vote) => {
+      aggregatedVotes.reduce<Record<string, number>>((nextVotes, vote) => {
         nextVotes[voteTargetKey(vote.target_type, vote.target_id)] = vote.count;
         return nextVotes;
       }, {}),
-    [votes]
+    [aggregatedVotes]
   );
 
   const weeklyTopItems = useMemo<WeeklyTopItem[]>(
     () =>
-      votes
+      aggregatedVotes
         .map((vote) => {
           if (vote.target_type === "flavor") {
             const flavor = chichaFlavors.find((item) => item.id === vote.target_id);
@@ -618,7 +645,7 @@ export default function HomePage() {
         .filter((item): item is WeeklyTopItem => Boolean(item))
         .sort((a, b) => b.vote.count - a.vote.count)
         .slice(0, 3),
-    [chichaFlavors, products, votes]
+    [aggregatedVotes, chichaFlavors, products]
   );
 
   function enterLounge() {
@@ -688,7 +715,9 @@ export default function HomePage() {
       const normalizedVote = normalizeVote(data.vote);
       setVotes((currentVotes) => {
         const withoutVote = currentVotes.filter(
-          (vote) => voteTargetKey(vote.target_type, vote.target_id) !== targetKey
+          (vote) =>
+            voteTargetKey(vote.target_type, vote.target_id) !== targetKey ||
+            vote.week_start !== normalizedVote.week_start
         );
         return [...withoutVote, normalizedVote];
       });

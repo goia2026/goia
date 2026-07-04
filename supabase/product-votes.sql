@@ -20,8 +20,12 @@ alter table public.product_votes
 
 update public.product_votes
 set
-  target_type = coalesce(target_type, 'product'),
-  target_id = coalesce(target_id, product_id)
+  target_type = case
+    when coalesce(target_id, product_id) like 'flavor:%' then 'flavor'
+    when coalesce(target_id, product_id) like 'product:%' then 'product'
+    else coalesce(target_type, 'product')
+  end,
+  target_id = regexp_replace(coalesce(target_id, product_id), '^(product|flavor):', '')
 where target_id is null;
 
 alter table public.product_votes

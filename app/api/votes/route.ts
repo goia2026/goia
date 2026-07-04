@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Category } from "@/lib/menu-data";
+import { supabase } from "@/lib/supabase";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const nonVotableCategories: Category[] = [
@@ -16,6 +17,26 @@ function getWeekStart(date = new Date()) {
   nextDate.setUTCDate(nextDate.getUTCDate() + diff);
   nextDate.setUTCHours(0, 0, 0, 0);
   return nextDate.toISOString().slice(0, 10);
+}
+
+export async function GET(request: Request) {
+  if (!supabase) {
+    return NextResponse.json({ error: "Supabase is not configured." }, { status: 500 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const weekStart = searchParams.get("weekStart") || getWeekStart();
+  const { data, error } = await supabase
+    .from("product_votes")
+    .select("product_id,target_type,target_id,count,week_start")
+    .eq("week_start", weekStart)
+    .order("count", { ascending: false });
+
+  if (error) {
+    return NextResponse.json({ error: error.message, votes: [] }, { status: 500 });
+  }
+
+  return NextResponse.json({ votes: data || [], weekStart });
 }
 
 export async function POST(request: Request) {

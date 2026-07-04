@@ -140,10 +140,10 @@ const nonVotableCategories: Category[] = [
 
 function getWeekStart(date = new Date()) {
   const nextDate = new Date(date);
-  const day = nextDate.getDay();
+  const day = nextDate.getUTCDay();
   const diff = day === 0 ? -6 : 1 - day;
-  nextDate.setDate(nextDate.getDate() + diff);
-  nextDate.setHours(0, 0, 0, 0);
+  nextDate.setUTCDate(nextDate.getUTCDate() + diff);
+  nextDate.setUTCHours(0, 0, 0, 0);
   return nextDate.toISOString().slice(0, 10);
 }
 
@@ -473,7 +473,19 @@ export default function HomePage() {
     window.localStorage.setItem(localeStorageKey, locale);
   }, [locale]);
 
+  async function refreshVotes() {
+    const response = await fetch(`/api/votes?weekStart=${currentWeekStart}`);
+    if (!response.ok) return;
+    const data = (await response.json().catch(() => null)) as
+      | { votes?: Partial<ProductVote>[] }
+      | null;
+    if (data?.votes) {
+      setVotes(data.votes.map(normalizeVote));
+    }
+  }
+
   useEffect(() => {
+    refreshVotes();
     if (!supabase) return;
     const supabaseClient = supabase;
 
@@ -484,7 +496,7 @@ export default function HomePage() {
       supabaseClient
         .from("product_votes")
         .select("product_id,target_type,target_id,count,week_start")
-        .eq("week_start", getWeekStart())
+        .eq("week_start", currentWeekStart)
         .order("count", { ascending: false })
     ]).then(([productsResult, categoriesResult, flavorsResult, votesResult]) => {
       if (productsResult.data) {
@@ -508,6 +520,8 @@ export default function HomePage() {
 
       if (votesResult.data) {
         setVotes((votesResult.data as Partial<ProductVote>[]).map(normalizeVote));
+      } else {
+        refreshVotes();
       }
     });
 
@@ -549,21 +563,14 @@ export default function HomePage() {
           });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "product_votes" }, () => {
-        supabaseClient
-          .from("product_votes")
-          .select("product_id,target_type,target_id,count,week_start")
-          .eq("week_start", getWeekStart())
-          .order("count", { ascending: false })
-          .then(({ data }) => {
-            if (data) setVotes((data as Partial<ProductVote>[]).map(normalizeVote));
-          });
+        refreshVotes();
       });
     channel.subscribe();
 
     return () => {
       supabaseClient.removeChannel(channel);
     };
-  }, []);
+  }, [currentWeekStart]);
 
   useEffect(() => {
     writeJson("goia:favorites", favorites);
@@ -722,6 +729,7 @@ export default function HomePage() {
         return [...withoutVote, normalizedVote];
       });
     }
+    await refreshVotes();
   }
 
   async function voteForProduct(product: Product) {

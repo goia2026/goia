@@ -612,7 +612,7 @@ function Landing({
       className="relative flex min-h-screen items-center justify-center overflow-hidden bg-black px-5"
     >
       <motion.video
-        src="/goia-welcome.mp4"
+        src="https://slnstqptjqagjcespdpu.supabase.co/storage/v1/object/public/goia2026/goia-welcome.mp4"
         className="absolute inset-0 h-full w-full object-cover opacity-90 will-change-transform"
         autoPlay
         muted

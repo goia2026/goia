@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import type { Category } from "@/lib/menu-data";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-const nonVotableCategories: Category[] = ["softs-juices", "hot-drinks", "spiritueux"];
+const nonVotableCategories: Category[] = [
+  "chichas",
+  "softs-juices",
+  "hot-drinks",
+  "spiritueux"
+];
 
 function getWeekStart(date = new Date()) {
   const nextDate = new Date(date);

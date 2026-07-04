@@ -131,7 +131,12 @@ const fractionalCurrency = new Intl.NumberFormat("fr-FR", {
 const luxuryEase = [0.16, 1, 0.3, 1] as const;
 const storageVersion = "goia-luxury-v14";
 const localeStorageKey = "goia:locale";
-const nonVotableCategories: Category[] = ["softs-juices", "hot-drinks", "spiritueux"];
+const nonVotableCategories: Category[] = [
+  "chichas",
+  "softs-juices",
+  "hot-drinks",
+  "spiritueux"
+];
 
 function getWeekStart(date = new Date()) {
   const nextDate = new Date(date);

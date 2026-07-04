@@ -23,6 +23,11 @@ import type { ChangeEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { GoiaLogo } from "@/components/GoiaLogo";
 import {
+  ChichaFlavor,
+  initialChichaFlavors,
+  normalizeChichaFlavor
+} from "@/lib/chicha-flavors";
+import {
   Category,
   Locale,
   MenuCategory,
@@ -49,6 +54,12 @@ const adminCopy = {
     seed: "Synchroniser la carte complète",
     logout: "Déconnexion",
     categories: "Catégories",
+    chichaFlavors: "Goûts de chicha",
+    addFlavor: "Ajouter un goût",
+    flavorType: "Type",
+    flavorComponents: "Sous-goûts / composants",
+    badge: "Badge",
+    position: "Ordre",
     image: "Photo produit",
     imageUrl: "URL de l’image",
     upload: "Importer une photo",
@@ -83,6 +94,12 @@ const adminCopy = {
     seed: "Komplette Karte synchronisieren",
     logout: "Abmelden",
     categories: "Kategorien",
+    chichaFlavors: "Shisha-Sorten",
+    addFlavor: "Sorte hinzufügen",
+    flavorType: "Typ",
+    flavorComponents: "Komponenten",
+    badge: "Badge",
+    position: "Reihenfolge",
     image: "Produktfoto",
     imageUrl: "Bild-URL",
     upload: "Foto hochladen",
@@ -117,6 +134,12 @@ const adminCopy = {
     seed: "Sync full menu",
     logout: "Log out",
     categories: "Categories",
+    chichaFlavors: "Hookah flavors",
+    addFlavor: "Add flavor",
+    flavorType: "Type",
+    flavorComponents: "Components",
+    badge: "Badge",
+    position: "Order",
     image: "Product photo",
     imageUrl: "Image URL",
     upload: "Upload photo",
@@ -140,6 +163,8 @@ const adminCopy = {
     supabaseHint: "Connect Supabase to sync changes online."
   }
 };
+
+type AdminCopy = typeof adminCopy.fr;
 
 type SupabaseDiagnostic = {
   configured?: boolean;
@@ -206,6 +231,18 @@ function normalizeCategory(category: MenuCategory): MenuCategory {
   };
 }
 
+function blankChichaFlavor(position = 0): ChichaFlavor {
+  return {
+    id: `chicha-flavor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type: "signature",
+    name: { fr: "Nouveau goût", de: "Neue Sorte", en: "New flavor" },
+    notes: { fr: "", de: "", en: "" },
+    badge: "",
+    available: true,
+    position
+  };
+}
+
 function categoryLabel(categoryId: Category, categories: MenuCategory[], locale: Locale) {
   return (
     categories.find((category) => category.id === categoryId)?.labels[locale] ||
@@ -219,6 +256,9 @@ export default function AdminPage() {
   const [query, setQuery] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<MenuCategory[]>(initialCategories);
+  const [chichaFlavors, setChichaFlavors] = useState<ChichaFlavor[]>(
+    initialChichaFlavors.map(normalizeChichaFlavor)
+  );
   const [status, setStatus] = useState<"saved" | "saving">("saved");
   const [newProductId, setNewProductId] = useState<string | null>(null);
   const [draftProduct, setDraftProduct] = useState<Product | null>(null);
@@ -238,9 +278,10 @@ export default function AdminPage() {
   }, []);
 
   async function refreshAdminData() {
-    const [productsResponse, categoriesResponse] = await Promise.all([
+    const [productsResponse, categoriesResponse, flavorsResponse] = await Promise.all([
       fetch("/api/admin/products"),
-      fetch("/api/admin/categories")
+      fetch("/api/admin/categories"),
+      fetch("/api/admin/chicha-flavors")
     ]);
     const productsData = (await productsResponse.json()) as {
       configured?: boolean;
@@ -254,18 +295,29 @@ export default function AdminPage() {
       env?: Record<string, boolean>;
       missing?: string[];
     };
+    const flavorsData = (await flavorsResponse.json().catch(() => ({}))) as {
+      configured?: boolean;
+      flavors?: ChichaFlavor[];
+      env?: Record<string, boolean>;
+      missing?: string[];
+    };
 
     setOnlineStorage(Boolean(productsData.configured && categoriesData.configured));
     setSupabaseDiagnostic({
       configured: Boolean(productsData.configured && categoriesData.configured),
-      env: { ...productsData.env, ...categoriesData.env },
-      missing: [...(productsData.missing || []), ...(categoriesData.missing || [])].filter(
-        (name, index, list) => list.indexOf(name) === index
-      )
+      env: { ...productsData.env, ...categoriesData.env, ...flavorsData.env },
+      missing: [
+        ...(productsData.missing || []),
+        ...(categoriesData.missing || []),
+        ...(flavorsData.missing || [])
+      ].filter((name, index, list) => list.indexOf(name) === index)
     });
     setProducts((productsData.products || []).map(normalizeProduct));
     setCategories((categoriesData.categories?.length ? categoriesData.categories : initialCategories)
       .map(normalizeCategory)
+      .sort((a, b) => a.position - b.position));
+    setChichaFlavors((flavorsData.flavors?.length ? flavorsData.flavors : initialChichaFlavors)
+      .map(normalizeChichaFlavor)
       .sort((a, b) => a.position - b.position));
   }
 
@@ -539,6 +591,87 @@ export default function AdminPage() {
     setStatus("saved");
   }
 
+  async function persistChichaFlavor(flavor: ChichaFlavor) {
+    setStatus("saving");
+    setSyncMessage(null);
+    const response = await fetch("/api/admin/chicha-flavors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(flavor)
+    });
+    const data = (await response.json().catch(() => ({}))) as AdminApiResponse;
+    setSupabaseDiagnostic({
+      configured: data.configured,
+      env: data.env,
+      missing: data.missing
+    });
+    if (!response.ok || data.error) {
+      setSyncMessage({
+        type: "error",
+        text: data.error || copy.syncError
+      });
+      setStatus("saved");
+      return false;
+    }
+    setSyncMessage({
+      type: "success",
+      text: copy.saved
+    });
+    setStatus("saved");
+    return true;
+  }
+
+  async function updateChichaFlavor(id: string, patch: Partial<ChichaFlavor>) {
+    const nextFlavors = chichaFlavors
+      .map((flavor) =>
+        flavor.id === id ? normalizeChichaFlavor({ ...flavor, ...patch }) : flavor
+      )
+      .sort((a, b) => a.position - b.position);
+    setChichaFlavors(nextFlavors);
+
+    const updatedFlavor = nextFlavors.find((flavor) => flavor.id === id);
+    if (updatedFlavor) await persistChichaFlavor(updatedFlavor);
+  }
+
+  async function addChichaFlavor() {
+    const nextPosition =
+      chichaFlavors.length > 0
+        ? Math.max(...chichaFlavors.map((flavor) => flavor.position)) + 1
+        : 1;
+    const flavor = normalizeChichaFlavor(blankChichaFlavor(nextPosition));
+    setChichaFlavors([flavor, ...chichaFlavors]);
+    await persistChichaFlavor(flavor);
+  }
+
+  async function deleteChichaFlavor(id: string) {
+    setChichaFlavors(chichaFlavors.filter((flavor) => flavor.id !== id));
+    setStatus("saving");
+    const response = await fetch("/api/admin/chicha-flavors", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id })
+    });
+    const data = (await response.json().catch(() => ({}))) as AdminApiResponse;
+    setSupabaseDiagnostic({
+      configured: data.configured,
+      env: data.env,
+      missing: data.missing
+    });
+    if (!response.ok || data.error) {
+      setSyncMessage({
+        type: "error",
+        text: data.error || copy.syncError
+      });
+      setStatus("saved");
+      return;
+    }
+    setSyncMessage({
+      type: "success",
+      text: copy.saved
+    });
+    setStatus("saved");
+  }
+
   async function uploadProductImage(product: Product, file: File) {
     if (!onlineStorage) return;
 
@@ -686,6 +819,14 @@ export default function AdminPage() {
           locale={locale}
           title={copy.categories}
           onUpdateCategory={updateCategory}
+        />
+
+        <ChichaFlavorAdminPanel
+          copy={copy}
+          flavors={chichaFlavors}
+          onAddFlavor={addChichaFlavor}
+          onDeleteFlavor={deleteChichaFlavor}
+          onUpdateFlavor={updateChichaFlavor}
         />
 
         <section className="grid gap-4">
@@ -1238,6 +1379,143 @@ function AdminCategoryPanel({
               label={category.available === false ? "Hidden" : "Visible"}
               onChange={(checked) => onUpdateCategory(category.id, { available: checked })}
             />
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ChichaFlavorAdminPanel({
+  copy,
+  flavors,
+  onAddFlavor,
+  onDeleteFlavor,
+  onUpdateFlavor
+}: {
+  copy: AdminCopy;
+  flavors: ChichaFlavor[];
+  onAddFlavor: () => void;
+  onDeleteFlavor: (id: string) => void;
+  onUpdateFlavor: (id: string, patch: Partial<ChichaFlavor>) => void;
+}) {
+  return (
+    <section className="glass grid gap-4 rounded-[2rem] p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.28em] text-[#8A7665]">GOIA</p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">{copy.chichaFlavors}</h2>
+        </div>
+        <button
+          onClick={onAddFlavor}
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-black transition hover:bg-porcelain"
+        >
+          <Plus size={16} />
+          {copy.addFlavor}
+        </button>
+      </div>
+
+      <div className="grid gap-3">
+        {flavors.map((flavor) => (
+          <article
+            key={flavor.id}
+            className="grid gap-4 rounded-[1.5rem] border border-white/10 bg-black/22 p-4"
+          >
+            <div className="grid gap-3 md:grid-cols-[8rem_1fr_10rem_10rem]">
+              <Field label={copy.position}>
+                <input
+                  type="number"
+                  value={flavor.position}
+                  onChange={(event) =>
+                    onUpdateFlavor(flavor.id, { position: Number(event.target.value) })
+                  }
+                  className="goia-admin-input text-right"
+                />
+              </Field>
+              <Field label={copy.flavorType}>
+                <select
+                  value={flavor.type}
+                  onChange={(event) =>
+                    onUpdateFlavor(flavor.id, {
+                      type: event.target.value === "classique" ? "classique" : "signature"
+                    })
+                  }
+                  className="goia-admin-input"
+                >
+                  <option value="signature" className="bg-ink text-white">
+                    Mix Signature
+                  </option>
+                  <option value="classique" className="bg-ink text-white">
+                    Saveur classique
+                  </option>
+                </select>
+              </Field>
+              <Field label={copy.badge}>
+                <select
+                  value={flavor.badge || ""}
+                  onChange={(event) =>
+                    onUpdateFlavor(flavor.id, {
+                      badge:
+                        event.target.value === "best-seller" ||
+                        event.target.value === "signature"
+                          ? event.target.value
+                          : ""
+                    })
+                  }
+                  className="goia-admin-input"
+                >
+                  <option value="" className="bg-ink text-white">
+                    Aucun
+                  </option>
+                  <option value="best-seller" className="bg-ink text-white">
+                    Best Seller
+                  </option>
+                  <option value="signature" className="bg-ink text-white">
+                    GOIA Signature
+                  </option>
+                </select>
+              </Field>
+              <div className="flex items-end">
+                <TogglePill
+                  checked={flavor.available !== false}
+                  label={flavor.available === false ? copy.unavailable : copy.available}
+                  icon={flavor.available === false ? <EyeOff size={16} /> : <Eye size={16} />}
+                  tone="availability"
+                  onChange={(checked) => onUpdateFlavor(flavor.id, { available: checked })}
+                />
+              </div>
+            </div>
+
+            <LocaleTextFields
+              label={copy.name}
+              values={flavor.name}
+              onChange={(language, value) =>
+                onUpdateFlavor(flavor.id, {
+                  name: { ...flavor.name, [language]: value }
+                })
+              }
+            />
+
+            <LocaleTextAreas
+              label={copy.flavorComponents}
+              minHeightClassName="min-h-20"
+              values={flavor.notes}
+              onChange={(language, value) =>
+                onUpdateFlavor(flavor.id, {
+                  notes: { ...flavor.notes, [language]: value }
+                })
+              }
+            />
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => onDeleteFlavor(flavor.id)}
+                className="inline-flex h-11 items-center gap-2 rounded-full border border-red-400/20 px-4 text-sm text-red-100/72 transition hover:border-red-300/50 hover:bg-red-500/10 hover:text-red-50"
+              >
+                <Trash2 size={16} />
+                {copy.delete}
+              </button>
+            </div>
           </article>
         ))}
       </div>

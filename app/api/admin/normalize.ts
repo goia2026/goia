@@ -1,4 +1,6 @@
 import type { MenuCategory, Product } from "@/lib/menu-data";
+import type { ChichaFlavor } from "@/lib/chicha-flavors";
+import { normalizeChichaFlavor } from "@/lib/chicha-flavors";
 
 const emptyLocaleRecord = { fr: "", de: "", en: "" };
 
@@ -25,4 +27,8 @@ export function normalizeAdminCategory(category: MenuCategory): MenuCategory {
     labels: { ...emptyLocaleRecord, ...category.labels },
     available: category.available ?? true
   };
+}
+
+export function normalizeAdminChichaFlavor(flavor: ChichaFlavor): ChichaFlavor {
+  return normalizeChichaFlavor(flavor);
 }

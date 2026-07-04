@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
+import { initialChichaFlavors } from "@/lib/chicha-flavors";
 import { initialCategories, initialProducts } from "@/lib/menu-data";
 import { verifyAdminRequest } from "@/lib/admin-auth";
-import { normalizeAdminCategory, normalizeAdminProduct } from "@/app/api/admin/normalize";
+import {
+  normalizeAdminCategory,
+  normalizeAdminChichaFlavor,
+  normalizeAdminProduct
+} from "@/app/api/admin/normalize";
 import {
   isSupabaseAdminConfigured,
   missingSupabaseAdminEnv,
@@ -29,6 +34,7 @@ export async function POST(request: Request) {
   const admin = supabaseAdmin;
   const normalizedCategories = initialCategories.map(normalizeAdminCategory);
   const normalizedProducts = initialProducts.map(normalizeAdminProduct);
+  const normalizedFlavors = initialChichaFlavors.map(normalizeAdminChichaFlavor);
 
   const { error: categoryError } = await admin
     .from("categories")
@@ -44,8 +50,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ ...supabaseDiagnostic(), error: productError.message }, { status: 500 });
   }
 
+  const { error: flavorError } = await admin
+    .from("chicha_flavors")
+    .upsert(normalizedFlavors);
+
+  if (flavorError) {
+    return NextResponse.json({ ...supabaseDiagnostic(), error: flavorError.message }, { status: 500 });
+  }
+
   const currentCategoryIds = new Set<string>(normalizedCategories.map((category) => category.id));
   const currentProductIds = new Set(normalizedProducts.map((product) => product.id));
+  const currentFlavorIds = new Set(normalizedFlavors.map((flavor) => flavor.id));
 
   const { data: storedCategories, error: storedCategoryError } = await admin
     .from("categories")
@@ -63,12 +78,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ ...supabaseDiagnostic(), error: storedProductError.message }, { status: 500 });
   }
 
+  const { data: storedFlavors, error: storedFlavorError } = await admin
+    .from("chicha_flavors")
+    .select("id");
+
+  if (storedFlavorError) {
+    return NextResponse.json({ ...supabaseDiagnostic(), error: storedFlavorError.message }, { status: 500 });
+  }
+
   const staleCategoryIds = (storedCategories || [])
     .map((category) => category.id as string)
     .filter((id) => !currentCategoryIds.has(id));
   const staleProductIds = (storedProducts || [])
     .map((product) => product.id as string)
     .filter((id) => !currentProductIds.has(id));
+  const staleFlavorIds = (storedFlavors || [])
+    .map((flavor) => flavor.id as string)
+    .filter((id) => !currentFlavorIds.has(id));
+
+  const flavorDeleteResults = await Promise.all(
+    staleFlavorIds.map((id) => admin.from("chicha_flavors").delete().eq("id", id))
+  );
+  const flavorDeleteError = flavorDeleteResults.find((result) => result.error)?.error;
+  if (flavorDeleteError) {
+    return NextResponse.json({ ...supabaseDiagnostic(), error: flavorDeleteError.message }, { status: 500 });
+  }
 
   const productDeleteResults = await Promise.all(
     staleProductIds.map((id) => admin.from("products").delete().eq("id", id))
@@ -90,7 +124,9 @@ export async function POST(request: Request) {
     ...supabaseDiagnostic(),
     categories: normalizedCategories.length,
     products: normalizedProducts.length,
+    flavors: normalizedFlavors.length,
     removedCategories: staleCategoryIds.length,
-    removedProducts: staleProductIds.length
+    removedProducts: staleProductIds.length,
+    removedFlavors: staleFlavorIds.length
   });
 }

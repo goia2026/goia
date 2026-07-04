@@ -17,6 +17,11 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { GoiaLogo } from "@/components/GoiaLogo";
 import {
+  ChichaFlavor,
+  initialChichaFlavors,
+  normalizeChichaFlavor
+} from "@/lib/chicha-flavors";
+import {
   Category,
   Locale,
   MenuCategory,
@@ -351,6 +356,9 @@ export default function HomePage() {
   const [category, setCategory] = useState<Category | "all">("chichas");
   const [products, setProducts] = useState<Product[]>(initialProducts.map(normalizeProduct));
   const [categories, setCategories] = useState<MenuCategory[]>(initialCategories);
+  const [chichaFlavors, setChichaFlavors] = useState<ChichaFlavor[]>(
+    initialChichaFlavors.map(normalizeChichaFlavor)
+  );
   const [labels, setLabels] = useState<CategoryLabels>(categoryLabels);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -380,8 +388,9 @@ export default function HomePage() {
 
     Promise.all([
       supabaseClient.from("products").select("*"),
-      supabaseClient.from("categories").select("*").order("position", { ascending: true })
-    ]).then(([productsResult, categoriesResult]) => {
+      supabaseClient.from("categories").select("*").order("position", { ascending: true }),
+      supabaseClient.from("chicha_flavors").select("*").order("position", { ascending: true })
+    ]).then(([productsResult, categoriesResult, flavorsResult]) => {
       if (productsResult.data) {
         setProducts((productsResult.data as Product[]).map(normalizeProduct));
       }
@@ -395,6 +404,10 @@ export default function HomePage() {
           }));
         setCategories(liveCategories);
         setLabels(liveCategories.length ? labelsFromCategories(liveCategories) : categoryLabels);
+      }
+
+      if (flavorsResult.data) {
+        setChichaFlavors((flavorsResult.data as ChichaFlavor[]).map(normalizeChichaFlavor));
       }
     });
 
@@ -424,6 +437,15 @@ export default function HomePage() {
               setCategories(liveCategories);
               setLabels(liveCategories.length ? labelsFromCategories(liveCategories) : categoryLabels);
             }
+          });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chicha_flavors" }, () => {
+        supabaseClient
+          .from("chicha_flavors")
+          .select("*")
+          .order("position", { ascending: true })
+          .then(({ data }) => {
+            if (data) setChichaFlavors((data as ChichaFlavor[]).map(normalizeChichaFlavor));
           });
       });
     channel.subscribe();
@@ -512,6 +534,7 @@ export default function HomePage() {
                 locale={locale}
                 labels={labels}
                 favorites={favorites}
+                chichaFlavors={chichaFlavors}
                 emptyText={t.empty}
                 onOpen={setSelectedProduct}
                 onToggleFavorite={toggleFavorite}
@@ -977,113 +1000,6 @@ const categoryDescriptions: Record<Category, Record<Locale, string>> = {
   }
 };
 
-const signatureMixes = [
-  {
-    name: "Black Nana",
-    notes: {
-      fr: "Menthe fraîche • Raisin noir",
-      de: "Frische Minze • Schwarze Traube",
-      en: "Fresh mint • Black grape"
-    }
-  },
-  {
-    name: "Mi Amor",
-    notes: {
-      fr: "Banane • Ananas • Menthe",
-      de: "Banane • Ananas • Minze",
-      en: "Banana • Pineapple • Mint"
-    }
-  },
-  {
-    name: "Watermelon",
-    notes: {
-      fr: "Menthe • Pastèque",
-      de: "Minze • Wassermelone",
-      en: "Mint • Watermelon"
-    }
-  },
-  {
-    name: "Love 66",
-    notes: {
-      fr: "Melon • Pastèque • Fruit de la passion",
-      de: "Melone • Wassermelone • Passionsfrucht",
-      en: "Melon • Watermelon • Passion fruit"
-    },
-    badge: "best-seller"
-  },
-  {
-    name: "Hawaï",
-    notes: {
-      fr: "Mangue • Ananas • Menthe",
-      de: "Mango • Ananas • Minze",
-      en: "Mango • Pineapple • Mint"
-    }
-  },
-  {
-    name: "Fraise Banane",
-    notes: {
-      fr: "Fraise • Banane",
-      de: "Erdbeere • Banane",
-      en: "Strawberry • Banana"
-    }
-  },
-  {
-    name: "Lady Killer",
-    notes: {
-      fr: "Mangue • Melon • Fraise",
-      de: "Mango • Melone • Erdbeere",
-      en: "Mango • Melon • Strawberry"
-    },
-    badge: "best-seller"
-  },
-  {
-    name: "Menthe Mangue",
-    notes: {
-      fr: "Mangue • Ananas",
-      de: "Mango • Ananas",
-      en: "Mango • Pineapple"
-    }
-  },
-  {
-    name: "African Queen",
-    notes: {
-      fr: "Cocktail de fruits frais sucrés",
-      de: "Süßer Cocktail aus frischen Früchten",
-      en: "Sweet cocktail of fresh fruits"
-    },
-    badge: "signature"
-  },
-  {
-    name: "Ice Kaktus",
-    notes: {
-      fr: "Kaktus glacé",
-      de: "Eisgekühlter Kaktus",
-      en: "Iced cactus"
-    }
-  },
-  {
-    name: "Blue Mistery",
-    notes: {
-      fr: "Myrtilles • Menthe légère",
-      de: "Blaubeeren • Leichte Minze",
-      en: "Blueberries • Light mint"
-    }
-  }
-];
-
-const classicChichaFlavors = [
-  { fr: "Menthe", de: "Minze", en: "Mint" },
-  { fr: "Menthe Sucrée", de: "Süße Minze", en: "Sweet Mint" },
-  { fr: "Double Pomme", de: "Doppelapfel", en: "Double Apple" },
-  { fr: "Framboise", de: "Himbeere", en: "Raspberry" },
-  { fr: "Kiwi", de: "Kiwi", en: "Kiwi" },
-  { fr: "Citron", de: "Zitrone", en: "Lemon" },
-  { fr: "Arlequin", de: "Harlekin", en: "Harlequin" },
-  { fr: "Ananas", de: "Ananas", en: "Pineapple" },
-  { fr: "Pomme Sucrée", de: "Süßer Apfel", en: "Sweet Apple" },
-  { fr: "Pêche", de: "Pfirsich", en: "Peach" }
-];
-
 function getCategoryIcon(category: Category) {
   switch (category) {
     case "chichas":
@@ -1215,6 +1131,7 @@ function ProductGrid({
   locale,
   labels,
   favorites,
+  chichaFlavors,
   emptyText,
   onOpen,
   onToggleFavorite
@@ -1224,6 +1141,7 @@ function ProductGrid({
   locale: Locale;
   labels: CategoryLabels;
   favorites: string[];
+  chichaFlavors: ChichaFlavor[];
   emptyText: string;
   onOpen: (product: Product) => void;
   onToggleFavorite: (id: string) => void;
@@ -1484,7 +1402,7 @@ function ProductGrid({
                   className="overflow-hidden"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <ChichaFlavorPanel locale={locale} compact />
+                  <ChichaFlavorPanel flavors={chichaFlavors} locale={locale} compact />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1497,18 +1415,28 @@ function ProductGrid({
   );
 }
 
-function ChichaFlavorSection({ locale }: { locale: Locale }) {
-  return <ChichaFlavorPanel locale={locale} />;
+function ChichaFlavorSection({
+  flavors,
+  locale
+}: {
+  flavors: ChichaFlavor[];
+  locale: Locale;
+}) {
+  return <ChichaFlavorPanel flavors={flavors} locale={locale} />;
 }
 
 function ChichaFlavorPanel({
+  flavors,
   locale,
   compact = false
 }: {
+  flavors: ChichaFlavor[];
   locale: Locale;
   compact?: boolean;
 }) {
   const c = appCopy[locale];
+  const signatureMixes = flavors.filter((flavor) => flavor.type === "signature");
+  const classicChichaFlavors = flavors.filter((flavor) => flavor.type === "classique");
 
   return (
     <div className={compact ? "grid gap-3" : "grid gap-5"}>
@@ -1530,13 +1458,16 @@ function ChichaFlavorPanel({
           <div className={compact ? "mt-4 grid gap-2.5" : "mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"}>
             {signatureMixes.map((mix, index) => (
               <motion.article
-                key={mix.name}
+                key={mix.id}
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
-                whileHover={{ y: -3, scale: 1.01 }}
+                whileHover={mix.available === false ? undefined : { y: -3, scale: 1.01 }}
                 transition={{ delay: index * 0.035, duration: 0.38, ease: luxuryEase }}
                 className={[
-                  "group relative overflow-hidden rounded-[1.35rem] border border-[#C8A45B]/18 bg-black/46 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl transition hover:border-[#C8A45B]/45",
+                  "group relative overflow-hidden rounded-[1.35rem] border bg-black/46 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl transition",
+                  mix.available === false
+                    ? "border-white/10 opacity-50 grayscale-[0.35]"
+                    : "border-[#C8A45B]/18 hover:border-[#C8A45B]/45",
                   compact ? "min-h-28 p-3" : "min-h-36 p-4"
                 ].join(" ")}
               >
@@ -1555,9 +1486,14 @@ function ChichaFlavorPanel({
                           : `🔥 ${c.bestSeller}`}
                       </span>
                     )}
+                    {mix.available === false && (
+                      <span className="rounded-full border border-red-200/25 bg-red-500/12 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-red-50">
+                        {c.soldOut}
+                      </span>
+                    )}
                   </div>
                   <div>
-                    <h4 className={compact ? "text-base font-semibold leading-tight text-white" : "text-xl font-semibold leading-tight text-white"}>{mix.name}</h4>
+                    <h4 className={compact ? "text-base font-semibold leading-tight text-white" : "text-xl font-semibold leading-tight text-white"}>{mix.name[locale]}</h4>
                     <p className={compact ? "mt-1.5 text-xs leading-5 text-white/58" : "mt-2 text-sm leading-6 text-white/58"}>{mix.notes[locale]}</p>
                   </div>
                 </div>
@@ -1585,16 +1521,20 @@ function ChichaFlavorPanel({
           <div className={compact ? "mt-4 flex flex-wrap gap-2" : "mt-5 flex flex-wrap gap-2.5"}>
             {classicChichaFlavors.map((flavor, index) => (
               <motion.span
-                key={flavor.fr}
+                key={flavor.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.035, duration: 0.35, ease: luxuryEase }}
                 className={[
-                  "rounded-full border border-[#C8A45B]/48 bg-[#C8A45B]/8 font-medium text-[#F2D991] shadow-[0_0_28px_rgba(200,164,91,0.08)] backdrop-blur-xl",
+                  "rounded-full border font-medium shadow-[0_0_28px_rgba(200,164,91,0.08)] backdrop-blur-xl",
+                  flavor.available === false
+                    ? "border-white/10 bg-white/[0.04] text-white/38 line-through"
+                    : "border-[#C8A45B]/48 bg-[#C8A45B]/8 text-[#F2D991]",
                   compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"
                 ].join(" ")}
               >
-                {flavor[locale]}
+                {flavor.name[locale]}
+                {flavor.available === false ? ` · ${c.soldOut}` : ""}
               </motion.span>
             ))}
           </div>
